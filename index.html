@@ -78,20 +78,10 @@
         <input id="setup-name" type="text" maxlength="12" placeholder="Player name" spellcheck="false" aria-label="Player name">
         <button id="setup-go" type="submit" class="btn-primary"><span>Continue</span></button>
       </div>
+      <label class="setup-check"><input id="setup-wom" type="checkbox" checked><span>Import Wise Old Man History</span></label>
       <p id="setup-error" class="setup-error" hidden></p>
     </form>
 
-    <div id="wom-offer" class="wom-offer card" hidden>
-      <img src="/icons/wiki/Stats_icon.png" alt="">
-      <div class="wom-text">
-        <strong>Use Wise Old Man?</strong>
-        <span class="muted">Import your older progress so the graphs reach further back.</span>
-      </div>
-      <div class="wom-actions">
-        <button type="button" id="wom-skip" class="btn-ghost">No Thanks</button>
-        <button type="button" id="wom-import" class="btn-primary"><span>Import</span></button>
-      </div>
-    </div>
 
     <div id="dashboard" class="layout" hidden>
      <nav class="sec-nav" id="sec-nav" aria-label="Jump to a section">
@@ -108,6 +98,17 @@
       <button type="button" data-target="sec-activity" class="nav-activity" title="Recent Activity"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>Recent Activity</span></button>
      </nav>
      <div class="main-col">
+      <div id="wom-offer" class="wom-offer card" hidden>
+        <img src="/icons/wiki/Stats_icon.png" alt="">
+        <div class="wom-text">
+          <strong>Use Wise Old Man?</strong>
+          <span class="muted">Import your older progress so the graphs reach further back.</span>
+        </div>
+        <div class="wom-actions">
+          <button type="button" id="wom-skip" class="btn-ghost">No Thanks</button>
+          <button type="button" id="wom-import" class="btn-primary"><span>Import</span></button>
+        </div>
+      </div>
       <div class="toolbar" id="sec-overview">
         <p id="period-note" class="muted period-note"></p>
       </div>

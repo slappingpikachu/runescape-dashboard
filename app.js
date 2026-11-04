@@ -3919,6 +3919,7 @@ $("setup").addEventListener("submit", async (e) => {
   const name = $("setup-name").value.trim();
   const err = $("setup-error"), btn = $("setup-go");
   const fail = (msg) => { err.textContent = msg; err.hidden = false; $("setup-name").focus(); };
+  const useWom = $("setup-wom").checked;
   err.hidden = true;
   if (!/^[A-Za-z0-9 _-]{1,12}$/.test(name)) return fail("OSRS names are 1-12 letters, numbers, spaces, - or _.");
   btn.disabled = true; btn.classList.add("loading");
@@ -3935,8 +3936,9 @@ $("setup").addEventListener("submit", async (e) => {
     tickCooldown();
     await loadClog();
     setHistory(body);
-    $("wom-offer").hidden = false; // brand-new install: nothing imported yet
     toast(`Welcome, ${name}! First snapshot saved.`, "success");
+    $("wom-offer").hidden = !useWom;
+    answerWom(useWom); // runs on while the dashboard shows; if it fails the banner stays to try again
   } catch {
     fail("Could not reach the dashboard server. Is start.bat still running?");
   } finally {
@@ -3948,9 +3950,11 @@ $("setup").addEventListener("submit", async (e) => {
 async function answerWom(doImport) {
   const imp = $("wom-import"), skip = $("wom-skip");
   imp.disabled = skip.disabled = true;
+  const head = document.querySelector("#wom-offer .wom-text strong"), headText = head.textContent;
   const sub = document.querySelector("#wom-offer .wom-text .muted"), subText = sub.textContent;
   if (doImport) {
     imp.classList.add("loading"); imp.querySelector("span").textContent = "Importing…";
+    head.textContent = "Importing From Wise Old Man";
     sub.textContent = "This can take a few minutes. Keep this page open.";
   }
   try {
@@ -3968,7 +3972,7 @@ async function answerWom(doImport) {
     if (/doesn't track|no snapshots|already imported/.test(e.message)) $("wom-offer").hidden = true;
   } finally {
     imp.disabled = skip.disabled = false; imp.classList.remove("loading");
-    sub.textContent = subText;
+    head.textContent = headText; sub.textContent = subText;
     imp.querySelector("span").textContent = "Import";
   }
 }

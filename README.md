@@ -67,8 +67,8 @@ Build instructions for Windows and macOS are in [app/README.md](app/README.md).
 
 1. Enter your OSRS name. The dashboard verifies it on the hiscores, saves it to `settings.json` and takes the first
    snapshot.
-2. If your account is tracked on Wise Old Man, you are offered a one-time import of your earlier history. This can
-   also be run later with `tools\import-wom.ps1`.
+2. With **Import Wise Old Man History** ticked, your earlier history is imported once if your account is tracked
+   there. This can also be run later with `tools\import-wom.ps1`.
 3. In RuneLite, log in, open your bank once, then open the collection log and select **Search** once, so the JSON
    files include everything.
 4. Select **Refresh Stats** on the dashboard.

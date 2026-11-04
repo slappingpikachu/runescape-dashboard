@@ -318,6 +318,8 @@ input[type=search]:focus { border-color: var(--gold); }
 }
 .setup-row input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-soft); }
 .setup-row .btn-primary { flex: none; }
+.setup-check { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; color: var(--text-2); cursor: pointer; }
+.setup-check input { width: 17px; height: 17px; margin: 0; flex: none; accent-color: var(--gold); cursor: pointer; }
 .setup-error { margin: 12px 0 0 !important; color: var(--red); font-size: 15.5px; }
 .btn-primary.loading span, .btn-ghost.loading { opacity: .6; }
 .btn-ghost {
@@ -327,7 +329,7 @@ input[type=search]:focus { border-color: var(--gold); }
 .btn-ghost:hover { color: var(--text); border-color: var(--gold); }
 .btn-ghost:disabled { opacity: .5; cursor: default; }
 .wom-offer {
-  display: flex; align-items: center; gap: 14px; max-width: 1400px; margin: 0 auto 16px; padding: 14px 18px;
+  display: flex; align-items: center; gap: 14px; padding: 14px 18px;
   border-color: rgba(232,182,76,.35); background: linear-gradient(90deg, var(--gold-soft), transparent 60%), var(--surface);
   animation: sec-range-in .35s cubic-bezier(.3,.7,.3,1);
 }
