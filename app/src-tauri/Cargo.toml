@@ -1,0 +1,31 @@
+[package]
+name = "osrs-dashboard"
+version = "0.1.0"
+description = "OSRS Dashboard: your Old School RuneScape progress, on your own PC"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde_json = "1"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+# preserve_order: JSON objects keep the key order of the file (like PowerShell's ConvertFrom-Json)
+serde_json = { version = "1", features = ["preserve_order"] }
+indexmap = "2"
+regex = "1"
+percent-encoding = "2"
+# Downloads (hiscores, OSRS Wiki, Wise Old Man): blocking client with its own TLS, no system dependency
+ureq = "2"
+# Icons: read PNG/JPEG, add the white outline, save PNG
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[profile.release]
+# Small, fast app: the dashboard runs next to RuneLite
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

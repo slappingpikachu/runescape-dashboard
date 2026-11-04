@@ -1,0 +1,28 @@
+dist/
+*.log
+app/src-tauri/target/
+app/src-tauri/gen/
+app/bundle/
+
+# Personal settings (created by the setup page)
+settings.json
+
+# Your own data (history, bank, collection log, kills, prices). Only the shared reference lists are tracked.
+data/*
+!data/bank/
+data/bank/*
+!data/bank/mapping.json
+!data/clog/
+data/clog/*
+!data/clog/categories.json
+!data/clog/images.json
+!data/clog/items.json
+!data/progress/
+data/progress/*
+!data/progress/ca-tasks.json
+!data/progress/diary-tasks.json
+!data/progress/miniquests.json
+!data/progress/quest-reqs.json
+!data/plugin/
+data/plugin/*
+!data/plugin/npc-images.json
