@@ -21,7 +21,7 @@ with `--root <folder>`.
 ## Network access
 
 The app contacts the official hiscores, the OSRS Wiki and its price API, and Wise Old Man (import only), and only
-when you refresh or import. All other hosts are blocked in `src-tauri/src/net.rs`. JSON export files are read from
+when you update or import. All other hosts are blocked in `src-tauri/src/net.rs`. JSON export files are read from
 `~/.runelite/plugin-data/osrsdatasync/`.
 
 ## Building

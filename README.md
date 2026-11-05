@@ -25,7 +25,7 @@ These links always point to the latest version. Release notes and earlier versio
 - **Kills and loot**: every source in RuneLite's Loot Tracker, with loot totals and a searchable drop log.
 - **Quests, diaries and combat achievements**: completion status, requirements, and task lists with each completed
   diary task marked.
-- **Recent activity**: a feed of every refresh, a 16-week heatmap and streaks.
+- **Recent activity**: a feed of every update, a 16-week heatmap and streaks.
 
 Every view can be set to any period from one day to all time. Charts and periods follow the game's daily reset
 (00:00 UTC); the activity feed and drop log are grouped by your calendar day.
@@ -71,11 +71,11 @@ Build instructions for Windows and macOS are in [app/README.md](app/README.md).
    there. This can also be run later with `tools\import-wom.ps1`.
 3. In RuneLite, log in, open your bank once, then open the collection log and select **Search** once, so the JSON
    files include everything.
-4. Select **Refresh Stats** on the dashboard.
+4. Select **Update** on the dashboard.
 
 ## Data sources
 
-Data is only fetched when you select **Refresh Stats**, at most once per minute.
+Data is only fetched when you select **Update**, at most once per minute.
 
 | Source | Used for |
 | --- | --- |
@@ -86,8 +86,8 @@ Data is only fetched when you select **Refresh Stats**, at most once per minute.
 
 No other services are contacted, and nothing is uploaded.
 
-Each refresh adds a snapshot to `data\history.jsonl`. Snapshots from the last 14 days are kept in full; older
-snapshots are combined into one per game day, which keeps daily gains intact. Refresh at least once a day for
+Each update adds a snapshot to `data\history.jsonl`. Snapshots from the last 14 days are kept in full; older
+snapshots are combined into one per game day, which keeps daily gains intact. Update at least once a day for
 accurate daily figures.
 
 ## Phone access
@@ -105,14 +105,14 @@ access.
 | `data\bank\` | Bank history, item names and prices |
 | `data\clog\` | Collection log history, item data, prices and layout |
 | `data\progress\` | Quest, diary and combat achievement history and task lists |
-| `data\plugin\` | Kill totals per refresh and monster images |
+| `data\plugin\` | Kill totals per update and monster images |
 | `icons\` | Item, boss and monster images from the OSRS Wiki |
 
 Back up the `data` folder to keep your history. Use a separate copy of the dashboard for each account.
 
 ## Configuration
 
-The port (8765) and the refresh cooldown (60 seconds) are set at the top of `server.ps1`.
+The port (8765) and the update cooldown (60 seconds) are set at the top of `server.ps1`.
 
 ## Maintenance tools
 
@@ -131,7 +131,7 @@ These rebuild reference data from the OSRS Wiki when new content is released. Ru
 
 | Path | Contents |
 | --- | --- |
-| `server.ps1` | Local web server and refresh pipeline |
+| `server.ps1` | Local web server and update pipeline |
 | `plugin.ps1`, `bank.ps1`, `clog.ps1`, `progress.ps1`, `wom.ps1`, `icon-outline.ps1` | Data processing |
 | `index.html`, `styles.css`, `app.js`, `vendor\` | Web interface |
 | `app\` | Desktop app (Tauri and Rust) |

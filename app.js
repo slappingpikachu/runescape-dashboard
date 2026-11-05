@@ -1,5 +1,5 @@
 // OSRS progress dashboard. Data comes from the official hiscores via server.ps1,
-// which only contacts the hiscores when "Refresh Stats" is pressed.
+// which only contacts the hiscores when "Update" is pressed.
 // Each refresh is stored as a snapshot; gains = latest snapshot minus the
 // snapshot in effect at the start of the selected period.
 
@@ -165,22 +165,20 @@ const CHEV_IC = `<svg class="sec-chev" viewBox="0 0 24 24" aria-hidden="true"><p
 // The picker is a small panel floating over the card (opens from the button, closes on a pick,
 // a click outside or Esc), not a row that pushes the card down. Which section's panel is open: secOpen.
 let secOpen = null;
-// 1M is only offered here: the top bar has MTD
-const SEC_1M = { dataset: { period: "1m" }, title: "1 month", textContent: "1M" };
-const periodShort = (p) => (p === "1m" ? SEC_1M : $("periods").querySelector(`[data-period="${p}"]`))?.textContent ?? p;
+const periodShort = (p) => $("periods").querySelector(`[data-period="${p}"]`)?.textContent ?? p;
 function secPeriodBtnHtml(sec) {
   const on = secOwn(sec), open = secOpen === sec;
   const btn = `<button type="button" class="sec-pin ${on ? "active" : ""} ${open ? "open" : ""}" data-sec-pin="${sec}"
     aria-expanded="${open}" aria-haspopup="true" title="${on ? "This section uses its own period" : "Give this section its own period (it stops following the one at the top)"}">${PIN_IC}<span>Own Period</span>${on ? `<b>${esc(periodShort(secPeriod(sec)))}</b>` : ""}${CHEV_IC}</button>`;
   return `<span class="sec-pop-wrap" data-sec-wrap="${sec}">${btn}${open ? secPopHtml(sec) : ""}</span>`;
 }
-// The panel: an on/off switch, then the top bar's periods in its groups (split at its dividers), plus 1M
+// The panel: an on/off switch, then the top bar's periods in its groups (split at its dividers)
 function secPopHtml(sec) {
   const on = secOwn(sec), p = secPeriod(sec);
   const groups = [[]];
   for (const el of $("periods").children) {
     if (el.classList.contains("seg-sep")) groups.push([]);
-    else if (el.dataset.period) groups.at(-1).push(...(el.dataset.period === "month" ? [el, SEC_1M] : [el]));
+    else if (el.dataset.period) groups.at(-1).push(el);
   }
   const names = ["Days & weeks", "Months", "Years", "Everything"];
   const rows = groups.map((g, i) => `<div class="sec-pop-group"><span>${names[i] ?? ""}</span><div>${g.map((el) =>
@@ -280,7 +278,7 @@ async function refresh() {
   const btn = $("refresh-btn");
   btn.disabled = true;
   btn.classList.add("loading");
-  $("refresh-label").textContent = "Refreshing…";
+  $("refresh-label").textContent = "Updating…";
   const before = state.history.at(-1);
   try {
     const res = await fetch("/api/refresh", { method: "POST", body: "{}" });
@@ -288,14 +286,14 @@ async function refresh() {
     if (!res.ok) {
       const wait = Number((body.error || "").match(/(\d+)s/)?.[1]);
       if (wait) state.cooldownUntil = Date.now() + wait * 1000;
-      throw new Error(body.error || `Refresh failed (${res.status})`);
+      throw new Error(body.error || `Update failed (${res.status})`);
     }
     state.cooldownUntil = Date.now() + COOLDOWN_S * 1000;
     await loadClog(); // the same refresh also updated the collection log
     setHistory(body);
     const after = state.history.at(-1);
     const gained = before ? after.skills.Overall.xp - before.skills.Overall.xp : 0;
-    toast(gained > 0 ? `Stats updated · +${gained.toLocaleString()} XP since last refresh` : "Stats updated · no change since last refresh", "success");
+    toast(gained > 0 ? `Stats updated · +${gained.toLocaleString()} XP since last update` : "Stats updated · no change since last update", "success");
   } catch (e) {
     toast(e.message, "error");
   } finally {
@@ -314,7 +312,7 @@ function tickCooldown() {
     setTimeout(tickCooldown, 1000);
   } else {
     btn.disabled = location.protocol === "file:";
-    $("refresh-label").textContent = "Refresh Stats";
+    $("refresh-label").textContent = "Update";
   }
 }
 
@@ -402,7 +400,7 @@ function loadPrefs() {
   if (typeof p.killsTab === "string") state.killsTab = p.killsTab;
   if (Array.isArray(p.killsHidden)) state.killsHidden = p.killsHidden.filter((k) => typeof k === "string");
   if (["kills", "value", "recent", "name"].includes(p.killsSort)) state.killsSort = p.killsSort;
-  if (p.secPeriods && typeof p.secPeriods === "object") // only periods that still exist
+  if (p.secPeriods && typeof p.secPeriods === "object") // only periods that still exist in the top picker
     state.secPeriods = Object.fromEntries(Object.entries(p.secPeriods).filter(([, v]) => v != null && v in PERIOD_NAMES));
   if (["sources", "log"].includes(p.killsView)) state.killsView = p.killsView;
 }
@@ -430,7 +428,7 @@ function updateRelativeTime() {
 
 function renderNote({ h, base, start }) {
   const when = base.time.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  const note = h.length === 1 ? "First snapshot saved. Gains appear after your next refresh."
+  const note = h.length === 1 ? "First snapshot saved. Gains appear after your next update."
     : state.period === "all" ? `Since tracking began · ${when}`
     : base.time > start ? `Tracking began ${when}`
     : `Compared with ${when}`;
@@ -567,7 +565,7 @@ function renderDetail(c) {
         <img src="${skillIcon(s.name)}" alt="">
         <div><div class="name">${esc(s.name)}</div><div class="bar-track"><div class="bar-fill green" style="width:${(s.gain / topMax * 100).toFixed(1)}%"></div></div></div>
         <b>+${compact(s.gain)}</b></div>`).join("")
-    : `<p class="muted small" style="margin:0">Train a skill and refresh to see your top gains here.</p>`;
+    : `<p class="muted small" style="margin:0">Train a skill and press Update to see your top gains here.</p>`;
 
   $("detail").innerHTML = `
     <div class="detail-head">
@@ -896,7 +894,7 @@ function clogRecentHtml(daily, shortDate) {
         </div>
         ${daily.get(k) ? `<b class="clog-plus" title="New slots">+${daily.get(k)}</b>` : ""}
       </div>`;
-  }).join("") : `<p class="muted small" style="margin:0">No collection log changes recorded yet. Refresh after you log an item.</p>`;
+  }).join("") : `<p class="muted small" style="margin:0">No collection log changes recorded yet. Press Update after you log an item.</p>`;
 }
 
 // GE value of everything in the log (count obtained × today's GE price; untradeables count 0),
@@ -1277,7 +1275,7 @@ function renderItemDetail(c, id) {
   const inView = steps.filter((s) => s.time > c.base.time).reduce((t, s) => t + s.n, 0);
   const cats = [...cl.catIndex].filter(([, x]) => x.ids.includes(id)).map(([k]) => catName(k));
   const when = (d) => d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-  const HOW = { exact: "", likely: "likely · matched to new slots that session", sync: "found on this refresh" };
+  const HOW = { exact: "", likely: "likely · matched to new slots that session", sync: "found on this update" };
   const first = base ? null : steps[0];
   const rows = [
     ["Obtained", count.toLocaleString()],
@@ -1751,7 +1749,7 @@ function renderCa() {
       <div class="clog-head"><span class="clog-icon"><img src="${caIcon("Grandmaster")}" alt=""></span>
         <div><h3>Combat Achievements</h3><p class="muted small">${d.synced ? `From OSRS Data Sync (RuneLite) · synced ${synced}` : "Task list from the OSRS Wiki"}</p></div></div>
     </div>
-    ${d.synced ? "" : `<p class="ca-note">Your finished tasks load on the next Refresh (OSRS Data Sync).</p>`}
+    ${d.synced ? "" : `<p class="ca-note">Your finished tasks load on the next Update (OSRS Data Sync).</p>`}
     <div class="ca-top">
       <div class="qd-sum ca-sum">
         <div><b>${fmt(d.points)}</b><span>/ ${fmt(d.total)} points · ${doneAll} / ${d.tasks.length} tasks</span></div>
@@ -2127,13 +2125,13 @@ function renderBank() {
         <div class="clog-stats">
           ${stat("Coins", compact(coins), "incl. platinum tokens")}
           ${stat("Items", cur.length.toLocaleString(), `${smart.toLocaleString()} valued by parts · ${unpriced.toLocaleString()} no value`)}
-          ${best ? `<div class="clog-stat bank-best"><span>Most Valuable</span>${bankTile(best, "faint")}<b title="${Math.round(stack(best)).toLocaleString()} GP${b.live ? " · live price at the last Refresh" : ""}">${compact(stack(best))}</b><small>${esc(bankName(best[0]))}${best[1] > 1 ? ` × ${compact(best[1])}` : ""}</small></div>` : ""}
+          ${best ? `<div class="clog-stat bank-best"><span>Most Valuable</span>${bankTile(best, "faint")}<b title="${Math.round(stack(best)).toLocaleString()} GP${b.live ? " · live price at the last Update" : ""}">${compact(stack(best))}</b><small>${esc(bankName(best[0]))}${best[1] > 1 ? ` × ${compact(best[1])}` : ""}</small></div>` : ""}
         </div>
        </div>
         <div class="bank-out">
           <div class="bank-out-head"><h4>Equipped &amp; Inventory</h4>${out.length ? `<b>${compact(b.nowOut)} GP</b>` : ""}</div>
           ${out.length || b.liveAt ? bankKitHtml(b.cur.worn, b.cur.carried) : ""}
-          ${b.cur.guess.length ? `<div class="kit-pouch" title="RuneLite wasn't running at the last Refresh, so these left the bank and are counted as still carried until it can check">
+          ${b.cur.guess.length ? `<div class="kit-pouch" title="RuneLite wasn't running at the last Update, so these left the bank and are counted as still carried until it can check">
             <span class="muted small">≈ Probably carried</span><div class="bank-out-items">${b.cur.guess.map((it) => bankTile(it)).join("")}</div></div>` : ""}
           ${b.cur.pouch.length ? `<div class="kit-pouch">
             <span class="muted small">In your rune pouch${b.cur.carried.some(([id]) => /rune pouch/i.test(bankName(id))) ? "" : " (pouch is in the bank)"}</span><div class="bank-out-items">${b.cur.pouch.map((it) => bankTile(it)).join("")}</div></div>` : ""}
@@ -2237,7 +2235,7 @@ function bankChangesHtml() {
     </div>`);
   }
   return rows.length ? `<div class="bank-chg-list">${rows.join("")}</div>`
-    : `<p class="muted small">Items you gain or lose show up here after your bank changes in game and you press Refresh.</p>`;
+    : `<p class="muted small">Items you gain or lose show up here after your bank changes in game and you press Update.</p>`;
 }
 
 // Price moves for the selected period, so volatile items stand out.
@@ -2261,9 +2259,9 @@ function bankMovesHtml(period = secPeriod("bank")) {
   // buttons that used to sit here.
   const head = (extra = "") => `<div class="bank-moves-head"><h3>Price Moves <span>· ${esc(label)}</span></h3>${extra}</div>`;
   const empty = (msg) => `${head()}<div class="bank-moves-cols"><div class="move-list move-empty"><p class="muted small">${msg}</p></div></div>`;
-  if (!b.live) return empty("Press Refresh to see which of your items went up or down in price.");
+  if (!b.live) return empty("Press Update to see which of your items went up or down in price.");
   const then = period === "day" ? b.reset?.prices ?? b.prices : past?.prices;
-  if (!then) return empty(`Press Refresh to load the GE prices from the start of this period (${esc(label.toLowerCase())}).`);
+  if (!then) return empty(`Press Update to load the GE prices from the start of this period (${esc(label.toLowerCase())}).`);
   const moves = [];
   for (const [id, q] of ownedMap(b.cur)) {
     if (q <= 0 || id === 995 || id === 13204) continue;
@@ -2886,7 +2884,7 @@ function renderFeed() {
   const levels = all.reduce((s, e) => s + e.events.filter((v) => v.type === "level" && !v.milestone).length, 0);
   $("activity-sub").textContent = all.length
     ? `${all.length} session${all.length > 1 ? "s" : ""} · ${levels} level-up${levels === 1 ? "" : "s"}`
-    : "Your progress between refreshes";
+    : "Your progress between updates";
 
   const entries = all
     .map((e) => ({ ...e, events: f === "all" ? e.events : e.events.filter((v) => v.type === f || v.also?.includes(f)) }))
@@ -2895,7 +2893,7 @@ function renderFeed() {
 
   if (!entries.length) {
     $("feed").innerHTML = `<div class="feed-empty muted small">
-      <img src="${wikiIcon("Stats_icon.png")}" alt=""><p>${all.length ? "Nothing here yet for this filter." : "Play a bit, then press <b>Refresh Stats</b>.<br>Level-ups, boss kills and clues will show up here."}</p></div>`;
+      <img src="${wikiIcon("Stats_icon.png")}" alt=""><p>${all.length ? "Nothing here yet for this filter." : "Play a bit, then press <b>Update</b>.<br>Level-ups, boss kills and clues will show up here."}</p></div>`;
     return;
   }
 
@@ -3384,8 +3382,8 @@ function renderInsight() {
 
   box.hidden = false;
   if (!ins) {
-    box.innerHTML = head("No refreshes in this " + unit) +
-      `<p class="muted small ins-empty">Nothing was recorded here. Gains show up in the ${unit} you press <b>Refresh Stats</b>.</p>`;
+    box.innerHTML = head("No updates in this " + unit) +
+      `<p class="muted small ins-empty">Nothing was recorded here. Gains show up in the ${unit} you press <b>Update</b>.</p>`;
     return;
   }
 
@@ -3396,7 +3394,7 @@ function renderInsight() {
     : ins.sessions > 1 ? `${t(ins.firstAt)} – ${t(ins.lastAt)}` : t(ins.lastAt);
   const longGap = ins.firstAt - ins.from > 36 * 3600e3
     ? ` · includes gains since ${ins.from.toLocaleDateString(undefined, { month: "short", day: "numeric" })}` : "";
-  const sub = `${ins.sessions} refresh${ins.sessions > 1 ? "es" : ""} · ${span}${longGap}`;
+  const sub = `${ins.sessions} update${ins.sessions > 1 ? "s" : ""} · ${span}${longGap}`;
 
   const rankMove = ins.rankFrom > 0 && ins.rankTo > 0 && ins.rankTo < ins.rankFrom
     ? `▲ ${(ins.rankFrom - ins.rankTo).toLocaleString()} ranks` : `Total level ${ins.totalLevel.toLocaleString()}`;
@@ -3873,7 +3871,7 @@ if (window.SNAPSHOT) {
   // Read-only phone snapshot: the data is baked into the page, there is no server to refresh
   const pill = document.createElement("span");
   pill.className = "snapshot-pill";
-  pill.title = "A saved copy of your stats. It doesn't refresh.";
+  pill.title = "A saved copy of your stats. It doesn't update.";
   pill.textContent = "Snapshot";
   $("refresh-btn").replaceWith(pill);
   state.clogRaw = window.SNAPSHOT_CLOG ?? null;

@@ -598,6 +598,7 @@ fn period_dates(ctx: &Ctx) -> IndexMap<&'static str, String> {
     d.insert("1w", today - chrono::Days::new(7));
     d.insert("2w", today - chrono::Days::new(14));
     d.insert("month", today.with_day(1).unwrap());
+    d.insert("1m", months(1));
     d.insert("2m", months(2));
     d.insert("3m", months(3));
     d.insert("6m", months(6));

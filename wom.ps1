@@ -17,9 +17,9 @@ function Import-WomHistory([string]$Player, [string]$HistoryFile, [switch]$DryRu
   $utf8 = New-Object System.Text.UTF8Encoding($false)
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
   if (-not $Player) { throw "No player name." }
-  if (-not (Test-Path $HistoryFile)) { throw "No history yet - press Refresh stats once first." }
+  if (-not (Test-Path $HistoryFile)) { throw "No history yet - press Update once first." }
   $local = @([IO.File]::ReadAllLines($HistoryFile, $utf8) | Where-Object { $_.Trim() })
-  if (-not $local.Count) { throw "No history yet - press Refresh stats once first." }
+  if (-not $local.Count) { throw "No history yet - press Update once first." }
   if ($local | Where-Object { $_ -like '*"src":"wom"*' }) { throw "Wise Old Man history was already imported." }
   $template = ($local | Select-Object -Last 1) | ConvertFrom-Json
   $firstLocal = ($local | ForEach-Object { [datetime]::Parse(($_ | ConvertFrom-Json).t).ToUniversalTime() } | Sort-Object | Select-Object -First 1)
@@ -40,7 +40,7 @@ function Import-WomHistory([string]$Player, [string]$HistoryFile, [switch]$DryRu
     Write-Host "Wise Old Man: fetched $($snaps.Count) snapshots..."
     if ($page.Count -eq 50) { Start-Sleep -Milliseconds 3500 }
   } while ($page.Count -eq 50)
-  if (-not $snaps.Count) { throw "Wise Old Man has no snapshots of '$Player' from before your first Refresh. Nothing to import." }
+  if (-not $snaps.Count) { throw "Wise Old Man has no snapshots of '$Player' from before your first Update. Nothing to import." }
   $snaps = $snaps | Sort-Object { [datetime]::Parse($_.createdAt) }
 
   # ---- map official names -> Wise Old Man keys

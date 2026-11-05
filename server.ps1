@@ -205,7 +205,7 @@ function Get-Done($task) {
 function Invoke-Refresh {
   if (-not $script:Player) { return @(400, "{""error"":""Set up your player name first.""}") }
   $wait = $Cooldown - ((Get-Date) - $script:LastFetch).TotalSeconds
-  if ($wait -gt 0) { return @(429, "{""error"":""Please wait $([math]::Ceiling($wait))s before refreshing again.""}") }
+  if ($wait -gt 0) { return @(429, "{""error"":""Please wait $([math]::Ceiling($wait))s before updating again.""}") }
   $script:LastFetch = Get-Date
   $started = Get-Date
   $HiscoreUrl = Get-HiscoreUrl

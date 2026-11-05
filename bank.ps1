@@ -379,7 +379,7 @@ $PastDir = Join-Path $BankDir "prices-past"
 function Get-BankPeriodDates {
   $today = (Get-Date).ToUniversalTime().Date
   $d = [ordered]@{ "2d" = $today.AddDays(-1); "3d" = $today.AddDays(-2); "1w" = $today.AddDays(-7); "2w" = $today.AddDays(-14); "month" = $today.AddDays(1 - $today.Day)
-    "2m" = $today.AddMonths(-2); "3m" = $today.AddMonths(-3); "6m" = $today.AddMonths(-6); "year" = $today.AddDays(1 - $today.DayOfYear)
+    "1m" = $today.AddMonths(-1); "2m" = $today.AddMonths(-2); "3m" = $today.AddMonths(-3); "6m" = $today.AddMonths(-6); "year" = $today.AddDays(1 - $today.DayOfYear)
     "1y" = $today.AddYears(-1); "2y" = $today.AddYears(-2); "3y" = $today.AddYears(-3); "4y" = $today.AddYears(-4); "5y" = $today.AddYears(-5) }
   $histFile = Join-Path $BankDir "history.jsonl"
   if (Test-Path $histFile) {

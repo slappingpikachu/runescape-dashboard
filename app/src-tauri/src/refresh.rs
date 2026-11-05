@@ -101,7 +101,7 @@ pub fn refresh(root: &Path, web: &Web, icons: &Icons, player: &str, last_fetch: 
     if let Some(t) = last_fetch {
         let wait = COOLDOWN as f64 - t.elapsed().as_secs_f64();
         if wait > 0.0 {
-            return (429, format!(r#"{{"error":"Please wait {}s before refreshing again."}}"#, wait.ceil() as i64));
+            return (429, format!(r#"{{"error":"Please wait {}s before updating again."}}"#, wait.ceil() as i64));
         }
     }
     *last_fetch = Some(Instant::now());

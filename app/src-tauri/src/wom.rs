@@ -23,7 +23,7 @@ pub fn import(web: &Web, player: &str, history: &Path) -> Res<Imported> {
     if player.is_empty() {
         return Err("No player name.".into());
     }
-    let no_history = || "No history yet - press Refresh stats once first.".to_string();
+    let no_history = || "No history yet - press Update once first.".to_string();
     if !history.exists() {
         return Err(no_history());
     }
@@ -72,7 +72,7 @@ pub fn import(web: &Web, player: &str, history: &Path) -> Res<Imported> {
     }
     if snaps.is_empty() {
         return Err(format!(
-            "Wise Old Man has no snapshots of '{player}' from before your first Refresh. Nothing to import."
+            "Wise Old Man has no snapshots of '{player}' from before your first Update. Nothing to import."
         ));
     }
     let created = |s: &Value| parse_time(&ps_string(prop(s, "createdAt")));

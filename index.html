@@ -33,6 +33,7 @@
       <button data-period="2w" title="2 weeks">2W</button>
       <i class="seg-sep" aria-hidden="true"></i>
       <button data-period="month" title="This month">MTD</button>
+      <button data-period="1m" title="1 month">1M</button>
       <button data-period="2m" title="2 months">2M</button>
       <button data-period="3m" title="3 months">3M</button>
       <button data-period="6m" title="6 months">6M</button>
@@ -58,7 +59,7 @@
       <span id="last-refresh" class="muted"></span>
       <button type="button" id="refresh-btn" class="btn-primary">
         <svg class="icon-spin" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-        <span id="refresh-label">Refresh Stats</span>
+        <span id="refresh-label">Update</span>
       </button>
     </div>
   </header>
@@ -67,7 +68,7 @@
     <div id="empty" class="empty card" hidden>
       <img src="/icons/wiki/Stats_icon.png" alt="">
       <h2 id="empty-title">No Stats Yet</h2>
-      <p id="empty-text" class="muted">Press <strong>Refresh Stats</strong> to take your first snapshot.</p>
+      <p id="empty-text" class="muted">Press <strong>Update</strong> to take your first snapshot.</p>
     </div>
 
     <form id="setup" class="setup card" hidden autocomplete="off">
@@ -146,8 +147,8 @@
           </div>
           <div class="chart-wrap"><canvas id="xp-chart"></canvas></div>
           <div id="chart-empty" class="chart-empty" hidden>
-            <p>Your chart fills in as you refresh.</p>
-            <p class="muted small">Press <strong>Refresh Stats</strong> before and after you play.</p>
+            <p>Your chart fills in as you update.</p>
+            <p class="muted small">Press <strong>Update</strong> before and after you play.</p>
           </div>
         </div>
 
@@ -213,7 +214,7 @@
             <h3>Recent Activity</h3>
             <p class="muted small" id="activity-sub"></p>
           </div>
-          <span class="live-dot" title="Updated every time you refresh"></span>
+          <span class="live-dot" title="Updated every time you press Update"></span>
         </div>
 
         <div class="heatmap-wrap">
