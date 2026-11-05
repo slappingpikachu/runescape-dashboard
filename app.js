@@ -460,9 +460,10 @@ function skillGains({ cur, base }) {
 // Hiscores boss name -> Loot Tracker name, where they differ
 const BOSS_LOOT_NAME = { "Barrows Chests": "Barrows", "The Gauntlet": "Crystalline Hunllef", "The Corrupted Gauntlet": "Corrupted Hunllef",
   "Lunar Chests": "Lunar Chest", "Grotesque Guardians": "Dusk" };
-// Hiscores counts these differently from Loot Tracker loot claims, so they never use the fallback.
+// Hiscores counts these differently from Loot Tracker loot claims, so every kill count shown is the hiscores one.
 // Doom of Mokhaiotl: the hiscores count deep delves (each delve 8+ cleared); the Loot Tracker counts reward claims.
 const BOSS_NO_LOOT_FALLBACK = new Set(["Doom of Mokhaiotl"]);
+const hiscoresKills = (name) => (BOSS_NO_LOOT_FALLBACK.has(name) ? state.history.at(-1)?.bosses?.[name] ?? 0 : null);
 // Kills the plugin's Loot Tracker counted for a hiscores boss (0 if none)
 function lootTrackerKills(name) {
   if (BOSS_NO_LOOT_FALLBACK.has(name)) return 0;
@@ -860,7 +861,7 @@ function clogSourcesForDay(k, end, logged) {
     ...Object.values(state.plugin?.kills?.lootTracker ?? {}).flatMap((byName) => Object.keys(byName))];
   // (with its count when every Loot Tracker kill of it was that day)
   const ltKills = (name) => Object.values(state.plugin?.kills?.lootTracker ?? {})
-    .map((byName) => byName[name]).filter((r) => r && r.first >= k && r.last < end.getTime()).reduce((t, r) => t + (r.kills ?? 0), 0);
+    .map((byName) => byName[name]).filter((r) => r && r.first >= k && r.last < end.getTime() && !BOSS_NO_LOOT_FALLBACK.has(name)).reduce((t, r) => t + (r.kills ?? 0), 0);
   for (const name of known) {
     const c = sourceCategory(name);
     if (!c || pages.has(c) || clueTierOf(c) || !hasLogged(c)) continue;
@@ -2378,7 +2379,7 @@ const KILL_EXTRA_BOSSES = new Set(["Dusk", "Dawn", "Akkha", "Ba-Ba", "Kephri", "
   "Great Olm", "Verzik Vitur", "Dagannoth Rex", "Dagannoth Prime", "Dagannoth Supreme"]);
 function killIsBoss(s) {
   const bosses = state.history.at(-1)?.bosses ?? {};
-  return s.type === "NPC" && (s.name in bosses || (CA_BOSS_ALIAS[s.name] ?? "") in bosses || KILL_EXTRA_BOSSES.has(s.name));
+  return BOSS_NO_LOOT_FALLBACK.has(s.name) || (s.type === "NPC" && (s.name in bosses || (CA_BOSS_ALIAS[s.name] ?? "") in bosses || KILL_EXTRA_BOSSES.has(s.name)));
 }
 const killGroup = (s) => (killIsBoss(s) ? "BOSS" : s.type);
 // "per kill" / "per open" / ... for a tab (All mixes them: "per kill or loot")
@@ -2397,7 +2398,7 @@ function killSources() {
         value += killPrice(id) * q;
         if (best == null || killPrice(id) > killPrice(best)) best = id;
       }
-      list.push({ key: `${type}|${name}`, type, name, kills: r.kills ?? 0, value, best: best && killPrice(best) ? best : null, drops,
+      list.push({ key: `${type}|${name}`, type, name, kills: hiscoresKills(name) ?? r.kills ?? 0, value, best: best && killPrice(best) ? best : null, drops,
         first: r.first ? new Date(r.first) : null, last: r.last ? new Date(r.last) : null });
     }
   }
@@ -2439,7 +2440,7 @@ function renderKills() {
   const tops = [
     ["Most Killed", most((s) => killGroup(s) === "NPC"), "kills"],
     ["Top Boss", most((s) => killGroup(s) === "BOSS"), "kills"],
-    ["Most Opened", most((s) => s.type === "EVENT"), "opened"],
+    ["Most Opened", most((s) => killGroup(s) === "EVENT"), "opened"],
     ["Most Pickpocketed", most((s) => s.type === "PICKPOCKET"), "times"],
   ].filter(([, s]) => s);
   const countLabel = { BOSS: "Boss Kills", NPC: "Kills", EVENT: "Opened", PICKPOCKET: "Pickpockets", PLAYER: "Kills" }[state.killsTab] ?? "Times Looted";
@@ -2498,8 +2499,8 @@ function killLogEvents() {
     const items = (d.items ?? []).filter((it) => Array.isArray(it) && it[1] > 0)
       .map(([id, q, each]) => [id, q, each || killPrice(id)]).sort((a, b) => b[1] * b[2] - a[1] * a[2]);
     const value = d.gap ? items.reduce((s, [, q, each]) => s + q * each, 0) : d.value ?? 0;
-    out.push({ t: new Date(d.t), key: `${d.type}|${d.source}`, type: d.type, name: d.source, value, kc: d.kc ?? null, items,
-      kills: Math.max(1, d.kills ?? 1), gap: !!d.gap, known });
+    out.push({ t: new Date(d.t), key: `${d.type}|${d.source}`, type: d.type, name: d.source, value, kc: BOSS_NO_LOOT_FALLBACK.has(d.source) ? null : d.kc ?? null, items,
+      kills: BOSS_NO_LOOT_FALLBACK.has(d.source) ? 0 : Math.max(1, d.kills ?? 1), gap: !!d.gap, known });
   }
   return (state.killLog = out.sort((a, b) => b.t - a.t));
 }
@@ -2547,10 +2548,10 @@ function renderKillLog(list) {
     const shown = e.items.slice(0, 8), more = e.items.length - shown.length;
     const best = e.items[0] ? e.items[0][1] * e.items[0][2] : 0;
     const kUnit = killUnit(killGroup(e)), kWord = e.kills === 1 ? kUnit : kUnit + "s";
-    html += `<button type="button" class="klog-row ${best >= 1e5 ? "rare" : ""}" data-klog="${esc(e.key)}" title="${e.gap ? `${e.kills.toLocaleString()} ${kWord} while the plugin wasn't running (from RuneLite's Loot Tracker) · ` : ""}Show ${esc(e.name)} in Sources">
+    html += `<button type="button" class="klog-row ${best >= 1e5 ? "rare" : ""}" data-klog="${esc(e.key)}" title="${e.gap && e.kills ? `${e.kills.toLocaleString()} ${kWord} while the plugin wasn't running (from RuneLite's Loot Tracker) · ` : ""}Show ${esc(e.name)} in Sources">
       <time datetime="${e.t.toISOString()}">${e.t.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</time>
       ${killIconHtml(src)}
-      <span class="klog-name">${esc(titled(e.name))}${e.kc ? `<small>KC ${e.kc.toLocaleString()}</small>` : ""}${e.gap ? `<small>${e.kills.toLocaleString()} ${kWord}</small>` : ""}</span>
+      <span class="klog-name">${esc(titled(e.name))}${e.kc ? `<small>KC ${e.kc.toLocaleString()}</small>` : ""}${e.gap && e.kills ? `<small>${e.kills.toLocaleString()} ${kWord}</small>` : ""}</span>
       <span class="klog-items">${shown.length ? shown.map(([id, q]) => bankTile([id, q])).join("") : `<span class="muted small">${e.known ? "Nothing" : "Drops not saved"}</span>`}${more > 0 ? `<span class="klog-more">+${more}</span>` : ""}</span>
       <span class="kill-gp ${e.value >= 1e6 ? "big" : ""}" title="${e.value.toLocaleString()} GP ${e.gap ? "at today's GE price" : "when it dropped"}">${e.value ? compact(e.value) : "–"}</span>
     </button>`;
@@ -2580,7 +2581,7 @@ function renderKillList() {
       <button type="button" class="cat-row kill-row" data-kill="${esc(s.key)}" aria-expanded="${open}">
         ${killIconHtml(s)}
         <span class="cat-name">${esc(titled(s.name))}<small class="cat-kc">${state.killsTab === "all" ? `${killTypeName(killGroup(s))} · ` : ""}${s.last ? `last ${day(s.last)}` : ""}</small></span>
-        <span class="kill-n"><b>${s.kills.toLocaleString()}</b> ${s.type === "NPC" || s.type === "PLAYER" ? (s.kills === 1 ? "kill" : "kills") : "times"}</span>
+        <span class="kill-n"><b>${s.kills.toLocaleString()}</b> ${s.type === "NPC" || s.type === "PLAYER" || killGroup(s) === "BOSS" ? (s.kills === 1 ? "kill" : "kills") : "times"}</span>
         <span class="kill-gp ${s.value >= 1e6 ? "big" : ""}" title="${s.value.toLocaleString()} GP of drops at today's GE prices${s.kills && s.value ? ` · ≈ ${Math.round(s.value / s.kills).toLocaleString()} GP each` : ""}">${s.value ? compact(s.value) : "–"}${s.kills && s.value ? `<small>${compact(s.value / s.kills)} each</small>` : ""}</span>
       </button>
       <button type="button" class="kill-hide" data-kill-hide="${esc(s.key)}" title="${hiddenView ? "Show" : "Hide"} ${esc(s.name)}" aria-label="${hiddenView ? "Show" : "Hide"} ${esc(s.name)}">${hiddenView ? EYE : EYE_OFF}</button>
@@ -2702,7 +2703,7 @@ function killGainsByRefresh(h) {
     const gains = out.get(i) ?? new Map();
     for (const [key, n] of Object.entries(cur)) {
       const g = n - (prev[key] ?? 0);
-      if (g > 0 && !killHidden(key)) gains.set(key, (gains.get(key) ?? 0) + g);
+      if (g > 0 && !killHidden(key) && !BOSS_NO_LOOT_FALLBACK.has(key.slice(key.indexOf("|") + 1))) gains.set(key, (gains.get(key) ?? 0) + g);
     }
     if (gains.size) out.set(i, gains);
   }
