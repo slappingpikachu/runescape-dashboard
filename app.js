@@ -120,7 +120,7 @@ function normalize(raw) {
 }
 
 // Full names of the periods (the buttons in the top bar show short ones: 1D, 1W, MTD, YTD, 1Y, ...)
-const PERIOD_NAMES = { day: "Today", "2d": "Last 2 Days", "3d": "Last 3 Days", "1w": "1 Week", "2w": "2 Weeks", month: "This Month", "2m": "2 Months", "3m": "3 Months",
+const PERIOD_NAMES = { day: "Today", "2d": "Last 2 Days", "3d": "Last 3 Days", "1w": "1 Week", "2w": "2 Weeks", month: "This Month", "1m": "1 Month", "2m": "2 Months", "3m": "3 Months",
   "6m": "6 Months", year: "This Year", "1y": "1 Year", "2y": "2 Years", "3y": "3 Years", "4y": "4 Years", "5y": "5 Years", all: "All Time" };
 const periodLabel = (p = state.period) => PERIOD_NAMES[p] ?? p;
 
@@ -137,7 +137,7 @@ function periodStart(period) {
   if (days) return at(y, m, d - Number(days[1]) + 1);
   const weeks = period.match(/^(\d+)w$/); // "2w": that many weeks back from today's reset
   if (weeks) return at(y, m, d - 7 * Number(weeks[1]));
-  const back = period.match(/^(\d+)m$/); // "2m", "3m", "6m": that many months back from today's reset
+  const back = period.match(/^(\d+)m$/); // "1m", "2m", "3m", "6m": that many months back from today's reset
   if (back) return at(y, m - Number(back[1]), d);
   if (period === "year") return at(y, 0, 1);
   const years = period.match(/^(\d+)y$/); // "1y" ... "5y": that many years back from today's reset
@@ -165,20 +165,22 @@ const CHEV_IC = `<svg class="sec-chev" viewBox="0 0 24 24" aria-hidden="true"><p
 // The picker is a small panel floating over the card (opens from the button, closes on a pick,
 // a click outside or Esc), not a row that pushes the card down. Which section's panel is open: secOpen.
 let secOpen = null;
-const periodShort = (p) => $("periods").querySelector(`[data-period="${p}"]`)?.textContent ?? p;
+// 1M is only offered here: the top bar has MTD
+const SEC_1M = { dataset: { period: "1m" }, title: "1 month", textContent: "1M" };
+const periodShort = (p) => (p === "1m" ? SEC_1M : $("periods").querySelector(`[data-period="${p}"]`))?.textContent ?? p;
 function secPeriodBtnHtml(sec) {
   const on = secOwn(sec), open = secOpen === sec;
   const btn = `<button type="button" class="sec-pin ${on ? "active" : ""} ${open ? "open" : ""}" data-sec-pin="${sec}"
     aria-expanded="${open}" aria-haspopup="true" title="${on ? "This section uses its own period" : "Give this section its own period (it stops following the one at the top)"}">${PIN_IC}<span>Own Period</span>${on ? `<b>${esc(periodShort(secPeriod(sec)))}</b>` : ""}${CHEV_IC}</button>`;
   return `<span class="sec-pop-wrap" data-sec-wrap="${sec}">${btn}${open ? secPopHtml(sec) : ""}</span>`;
 }
-// The panel: an on/off switch, then the top bar's periods in its groups (split at its dividers)
+// The panel: an on/off switch, then the top bar's periods in its groups (split at its dividers), plus 1M
 function secPopHtml(sec) {
   const on = secOwn(sec), p = secPeriod(sec);
   const groups = [[]];
   for (const el of $("periods").children) {
     if (el.classList.contains("seg-sep")) groups.push([]);
-    else if (el.dataset.period) groups.at(-1).push(el);
+    else if (el.dataset.period) groups.at(-1).push(...(el.dataset.period === "month" ? [el, SEC_1M] : [el]));
   }
   const names = ["Days & weeks", "Months", "Years", "Everything"];
   const rows = groups.map((g, i) => `<div class="sec-pop-group"><span>${names[i] ?? ""}</span><div>${g.map((el) =>
@@ -400,7 +402,7 @@ function loadPrefs() {
   if (typeof p.killsTab === "string") state.killsTab = p.killsTab;
   if (Array.isArray(p.killsHidden)) state.killsHidden = p.killsHidden.filter((k) => typeof k === "string");
   if (["kills", "value", "recent", "name"].includes(p.killsSort)) state.killsSort = p.killsSort;
-  if (p.secPeriods && typeof p.secPeriods === "object") // only periods that still exist in the top picker
+  if (p.secPeriods && typeof p.secPeriods === "object") // only periods that still exist
     state.secPeriods = Object.fromEntries(Object.entries(p.secPeriods).filter(([, v]) => v != null && v in PERIOD_NAMES));
   if (["sources", "log"].includes(p.killsView)) state.killsView = p.killsView;
 }
