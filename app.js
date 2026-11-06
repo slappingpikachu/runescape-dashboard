@@ -2155,6 +2155,7 @@ function renderBank() {
       <div class="bank-changes"><h4>Changes</h4>${bankChangesHtml()}</div>
       </div>
       <div class="bank-moves" id="bank-moves"></div>
+      ${bankGeHtml()}
     </div>`;
   renderBankItems();
   renderBankPeriod(ctx());
@@ -2297,6 +2298,63 @@ function bankMovesHtml(period = secPeriod("bank")) {
       </div>`)}
       <div class="bank-moves-cols">${side(up, "Gaining", "pos")}${side(down, "Losing", "neg")}</div>
       <p class="muted small moves-note">Prices at ${at} vs. ${vs}</p>`;
+}
+
+// Grand Exchange: the plugin's current offers (containers.json "ge") in their in-game slots
+const GE_SLOTS = 8;
+const GE_STATES = { BUYING: ["Buying", "buy", "live"], BOUGHT: ["Bought", "buy", "done"], CANCELLED_BUY: ["Buy Cancelled", "buy", "off"],
+  SELLING: ["Selling", "sell", "live"], SOLD: ["Sold", "sell", "done"], CANCELLED_SELL: ["Sell Cancelled", "sell", "off"] };
+// Sellers pay 2% per item, rounded down, at most 5M each. OSRS Wiki "Grand Exchange", Exempt from tax.
+const GE_TAX_RATE = 0.02, GE_TAX_MAX = 5e6;
+const GE_TAX_FREE = new Set([233, 315, 329, 347, 351, 355, 361, 365, 379, 558, 806, 807, 808, 882, 884, 886, 952, 1733, 1735, 1755, 1785, 1891, 2140, 2142,
+  2309, 2327, 2347, 2552, 3008, 3010, 3012, 3014, 3853, 5325, 5329, 5331, 5341, 5343, 8007, 8008, 8009, 8010, 8011, 8013, 8794, 13190, 28790, 28824]);
+const geTax = (id, each) => (GE_TAX_FREE.has(id) ? 0 : Math.min(GE_TAX_MAX, Math.floor(each * GE_TAX_RATE)));
+const geMarket = (id) => (state.bank.live ? bankValue(id, state.bank.live.prices).gp : bankPrice(id));
+// What a sell offer brings in after tax against selling the same items at the GE price. Sold items use what they
+// really went for, the rest the asking price. A cancelled offer only counts what sold.
+function geSellResult(o, stage) {
+  const qty = stage === "off" ? o.done : o.total, market = geMarket(o.id);
+  if (!qty || !market) return null;
+  const sold = o.done ? o.spent - o.done * geTax(o.id, o.spent / o.done) : 0;
+  const net = sold + (qty - o.done) * (o.price - geTax(o.id, o.price));
+  return { net, gain: net - qty * market };
+}
+const geSigned = (n) => (n > 0 ? "+" : n < 0 ? "−" : "±") + compact(Math.abs(n));
+const geResultHtml = (gain, pre = "") => `<b class="${gain > 0 ? "pos" : gain < 0 ? "neg" : ""}">${pre}${gain < 0 ? "Loss" : "Profit"} ${geSigned(gain)} GP</b>`;
+function bankGeHtml() {
+  const c = state.plugin?.containers;
+  if (!Array.isArray(c?.ge)) return "";
+  const offers = c.ge.filter((o) => GE_STATES[o.state]), bySlot = new Map(offers.map((o) => [o.slot, o]));
+  const left = (side) => offers.filter((o) => GE_STATES[o.state][1] === side && GE_STATES[o.state][2] === "live")
+    .reduce((s, o) => s + (o.total - o.done) * o.price, 0);
+  const results = offers.filter((o) => GE_STATES[o.state][1] === "sell").map((o) => geSellResult(o, GE_STATES[o.state][2])).filter(Boolean);
+  const box = (slot) => {
+    const o = bySlot.get(slot);
+    if (!o) return `<div class="ge-slot ge-empty"><span class="muted small">Empty</span></div>`;
+    const [label, side, stage] = GE_STATES[o.state], name = bankName(o.id), selling = side === "sell", market = geMarket(o.id);
+    const pct = market ? ((o.price - market) / market) * 100 : 0;
+    const vs = market ? ` (${pct > 0 ? "+" : pct < 0 ? "−" : "±"}${Math.abs(pct).toFixed(Math.abs(pct) < 10 ? 1 : 0)}%)` : "";
+    const result = selling ? geSellResult(o, stage) : null, tax = geTax(o.id, o.price);
+    const title = `${name} · ${o.done.toLocaleString()} of ${o.total.toLocaleString()} at ${o.price.toLocaleString()} GP each\n${selling ? "Received" : "Spent"} ${o.spent.toLocaleString()} GP`
+      + (selling ? `\nGE tax ${tax.toLocaleString()} GP each` : "") + (result ? `\nAfter tax ${Math.round(result.net).toLocaleString()} GP, compared with the GE price` : "");
+    return `<div class="ge-slot ge-${stage} ge-${side}" title="${esc(title)}">
+      <div class="ge-top">${bankTile([o.id, o.total], "faint")}
+        <div class="move-name"><b><span class="ge-side">${selling ? "Sell" : "Buy"}</span> ${esc(name)}</b>
+          <small>${market ? `GE ${compact(market)} each · ` : ""}${selling ? "Selling" : "Buying"} at ${compact(o.price)}${vs}</small></div></div>
+      <div class="ge-bar"><i style="width:${o.total ? (o.done / o.total) * 100 : 0}%"></i></div>
+      <div class="ge-row"><span><span class="ge-state">${label}</span> · ${compact(o.done)} of ${compact(o.total)}</span><b>${compact(o.spent)} GP</b></div>
+      ${result ? `<div class="ge-row"><span>After Tax ${compact(result.net)} GP</span>${geResultHtml(result.gain)}</div>` : ""}
+    </div>`;
+  };
+  const at = new Date(c.updated), today = at.toDateString() === new Date().toDateString();
+  const when = at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) + (today ? "" : `, ${fmtDate(at, { month: "short", day: "numeric" })}`);
+  return `<div class="bank-ge">
+      <div class="bank-moves-head"><h3>Grand Exchange <span>· ${offers.length} of ${GE_SLOTS} Slots</span></h3>
+        <div class="moves-total"><small>Selling <b>${compact(left("sell"))} GP</b></small><small>Buying <b>${compact(left("buy"))} GP</b></small>
+          ${results.length ? `<small title="Every sell offer after tax, compared with the GE price">${geResultHtml(results.reduce((s, r) => s + r.gain, 0), "Sell ")}</small>` : ""}</div></div>
+      <div class="ge-grid">${Array.from({ length: GE_SLOTS }, (_, i) => box(i + 1)).join("")}</div>
+      <p class="muted small moves-note">Offers at ${esc(when)}</p>
+    </div>`;
 }
 
 // Item grid: drawn BANK_CHUNK tiles at a time as you scroll the box (an 800-item bank is a lot of elements)

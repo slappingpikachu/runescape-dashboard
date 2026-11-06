@@ -20,7 +20,8 @@ These links always point to the latest version. Release notes and earlier versio
 
 - **XP and levels**: gains per skill for any period, a total XP chart, per-day bars and skill comparisons.
 - **Bosses and clues**: kill counts and clue completions from the hiscores, with gains per period.
-- **Bank**: value over time, equipment and inventory, item changes between saves, and price movements.
+- **Bank**: value over time, equipment and inventory, item changes between saves, price movements, and Grand
+  Exchange offers with after-tax results against the GE price.
 - **Collection log**: slots, value, recent additions with their sources, every page of the in-game log, and pets.
 - **Kills and loot**: every source in RuneLite's Loot Tracker, with loot totals and a searchable drop log.
 - **Quests, diaries and combat achievements**: completion status, requirements, and task lists with each completed
@@ -80,7 +81,7 @@ Data is only fetched when you select **Update**, at most once per minute.
 | Source | Used for |
 | --- | --- |
 | Official OSRS hiscores | Levels, XP, ranks, boss kills, clue completions and collection log slots |
-| JSON files on your computer | Quests, diaries, combat achievements, collection log, bank, equipment, kills and loot |
+| JSON files on your computer | Quests, diaries, combat achievements, collection log, bank, equipment, Grand Exchange offers, kills and loot |
 | OSRS Wiki | GE prices for items you own or have owned, and names and images for new items |
 | Wise Old Man | The optional one-time history import |
 

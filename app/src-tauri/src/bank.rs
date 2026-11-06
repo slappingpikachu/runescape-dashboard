@@ -181,6 +181,11 @@ pub fn update(ctx: &Ctx) -> Res<String> {
     if !parts.is_empty() {
         let _ = update_items(ctx, &parts);
     }
+    // Items in Grand Exchange offers may never have been owned: the page needs their name too
+    let ge: Vec<String> = ge_ids(ctx).into_iter().filter(|id| !set.contains(id)).collect();
+    if !ge.is_empty() {
+        let _ = update_items(ctx, &ge);
+    }
     let live = match update_live_prices(ctx) {
         Ok(l) => Some(l),
         Err(e) => {
@@ -459,6 +464,17 @@ pub fn update_items(ctx: &Ctx, ids: &[String]) -> Res<String> {
 static HIST_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[(\d+),-?\d+\]").unwrap());
 static KC_DROPS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""drops":\{([^}]*)\}"#).unwrap());
 static KC_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""(\d+)":"#).unwrap());
+static GE_LIST: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""ge"\s*:\s*\[([^\]]*)\]"#).unwrap());
+static GE_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""id"\s*:\s*(\d+)"#).unwrap());
+
+// Item ids in the plugin's current Grand Exchange offers (containers.json "ge")
+fn ge_ids(ctx: &Ctx) -> Vec<String> {
+    let text = read_text(&ctx.plugin_dir.join("containers.json")).unwrap_or_default();
+    match GE_LIST.captures(&text) {
+        Some(ge) => GE_ID.captures_iter(&ge[1]).map(|m| m[1].to_string()).collect(),
+        None => Vec::new(),
+    }
+}
 
 // The only items whose prices are kept: every id in any saved bank / gear list, every collection log item
 // obtained, every item had as loot, plus the parts untradeables are valued by
@@ -478,6 +494,9 @@ pub fn price_ids(ctx: &Ctx) -> Res<IndexSet<String>> {
                 ids.insert(m[1].to_string());
             }
         }
+    }
+    for id in ge_ids(ctx) {
+        ids.insert(id); // offers: the page compares them with the live price
     }
     let mapping = read_hash(ctx, "mapping.json", Some("map"))?;
     let derived = read_hash(ctx, "derived.json", None)?;

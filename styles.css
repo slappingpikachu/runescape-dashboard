@@ -1241,6 +1241,30 @@ button.dt:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 .move-name small { font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .move-name .pos { color: var(--green); }
 .move-name .neg { color: var(--red); }
+/* Grand Exchange: the 8 offer slots, always even rows (4x2, 2x4 or 1x8) */
+.bank-ge { display: grid; gap: 14px; min-width: 0; }
+.bank-ge > p { margin: 0; }
+.ge-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+@container (min-width: 620px) { .ge-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 1240px) { .ge-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ge-slot { display: grid; align-content: space-between; gap: 10px; min-width: 0; min-height: 124px; padding: 12px 14px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 12px; --ge: var(--gold); }
+.ge-done { --ge: var(--green); }
+.ge-off { --ge: var(--red); }
+.ge-empty { place-items: center; align-content: center; opacity: .55; }
+.ge-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; }
+.ge-buy { --ge-side: #60a5fa; border-left: 3px solid var(--ge-side); }
+.ge-sell { --ge-side: #c084fc; border-left: 3px solid var(--ge-side); }
+.ge-side { display: inline-block; margin-right: 4px; padding: 0 7px; border: 1px solid var(--ge-side); border-radius: 6px; font-size: 12.5px; color: var(--ge-side); }
+.ge-state { font-weight: 700; color: var(--ge); }
+.ge-row .pos { color: var(--green); }
+.ge-row .neg { color: var(--red); }
+.ge-bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; }
+.ge-bar i { display: block; height: 100%; background: var(--ge); }
+.ge-off .ge-bar i { opacity: .7; }
+.ge-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.ge-row b { color: var(--text); font-weight: 700; }
+.bank-ge .moves-total small b:not(.pos, .neg) { color: var(--text); }
 .bank-right { display: grid; gap: 10px; min-width: 0; }
 .bank-card { --bank-tools-h: 40px; }
 .bank-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; min-height: var(--bank-tools-h); }

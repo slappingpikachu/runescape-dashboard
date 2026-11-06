@@ -108,6 +108,9 @@ function Update-Bank {
   # The parts untradeables are valued by need a name (tooltips) and a price too
   $parts = @(Get-BankParts $ids | Where-Object { -not $set.Contains($_) })
   if ($parts.Count) { try { [void](Update-BankItems $parts) } catch { } }
+  # Items in Grand Exchange offers may never have been owned: the page needs their name too
+  $geIds = @(Get-BankGeIds | Where-Object { -not $set.Contains($_) })
+  if ($geIds.Count) { try { [void](Update-BankItems $geIds) } catch { } }
   $live = try { Update-BankLivePrices } catch { Write-Host "Live prices unavailable: $($_.Exception.Message)"; $null }
   $prices = try { Update-BankPrices $live } catch { "prices unavailable: $($_.Exception.Message)" }
   $past = try { Update-BankPastPrices } catch { "past prices unavailable: $($_.Exception.Message)" }
@@ -448,6 +451,7 @@ function Get-BankPriceIds {
       foreach ($m in [regex]::Matches($d.Groups[1].Value, '"(\d+)":')) { [void]$ids.Add($m.Groups[1].Value) }
     }
   }
+  foreach ($id in (Get-BankGeIds)) { [void]$ids.Add($id) } # offers: the page compares them with the live price
   $mapping = Read-BankFile "mapping.json"; $mapping = if ($mapping) { ConvertTo-Hash ($mapping | ConvertFrom-Json).map } else { @{} }
   $derived = Read-BankFile "derived.json"; $derived = if ($derived) { ConvertTo-Hash ($derived | ConvertFrom-Json) } else { @{} }
   foreach ($id in @($ids)) {
@@ -455,6 +459,14 @@ function Get-BankPriceIds {
     if ($derived[$id]) { foreach ($o in @($derived[$id].options)) { foreach ($p in @($o)) { [void]$ids.Add("$($p[0])") } } }
   }
   return , $ids
+}
+
+# Item ids in the plugin's current Grand Exchange offers (containers.json "ge")
+function Get-BankGeIds {
+  $file = if (Get-Command Get-PluginDir -ErrorAction SilentlyContinue) { Join-Path (Get-PluginDir) "containers.json" }
+  if (-not $file -or -not (Test-Path $file)) { return @() }
+  $ge = [regex]::Match([IO.File]::ReadAllText($file, $Utf8), '"ge"\s*:\s*\[([^\]]*)\]')
+  @(foreach ($m in [regex]::Matches($ge.Groups[1].Value, '"id"\s*:\s*(\d+)')) { $m.Groups[1].Value })
 }
 
 # Value graph at the prices of the time (every daily price update moved the WHOLE graph,
