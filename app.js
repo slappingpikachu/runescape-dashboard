@@ -462,8 +462,11 @@ const BOSS_LOOT_NAME = { "Barrows Chests": "Barrows", "The Gauntlet": "Crystalli
   "Lunar Chests": "Lunar Chest", "Grotesque Guardians": "Dusk" };
 // Hiscores counts these differently from Loot Tracker loot claims, so every kill count shown is the hiscores one.
 // Doom of Mokhaiotl: the hiscores count deep delves (each delve 8+ cleared); the Loot Tracker counts reward claims.
-const BOSS_NO_LOOT_FALLBACK = new Set(["Doom of Mokhaiotl"]);
-const hiscoresKills = (name) => (BOSS_NO_LOOT_FALLBACK.has(name) ? state.history.at(-1)?.bosses?.[name] ?? 0 : null);
+// Gauntlets: the Loot Tracker counts every reward chest, and losing to the Hunllef still gives one.
+const BOSS_NO_LOOT_FALLBACK = new Set(["Doom of Mokhaiotl", "The Gauntlet", "Crystalline Hunllef", "The Corrupted Gauntlet", "Corrupted Hunllef"]);
+const GAUNTLET_LOOT = new Set(["Crystalline Hunllef", "Corrupted Hunllef"]);
+const CRYSTAL_SHARD = 23962; // in every Gauntlet chest from a win, never in one from a loss
+const hiscoresKills = (name) => (BOSS_NO_LOOT_FALLBACK.has(name) ? state.history.at(-1)?.bosses?.[BOSS_LOOT_NAME_REV[name] ?? name] ?? 0 : null);
 // Kills the plugin's Loot Tracker counted for a hiscores boss (0 if none)
 function lootTrackerKills(name) {
   if (BOSS_NO_LOOT_FALLBACK.has(name)) return 0;
@@ -2499,8 +2502,10 @@ function killLogEvents() {
     const items = (d.items ?? []).filter((it) => Array.isArray(it) && it[1] > 0)
       .map(([id, q, each]) => [id, q, each || killPrice(id)]).sort((a, b) => b[1] * b[2] - a[1] * a[2]);
     const value = d.gap ? items.reduce((s, [, q, each]) => s + q * each, 0) : d.value ?? 0;
-    out.push({ t: new Date(d.t), key: `${d.type}|${d.source}`, type: d.type, name: d.source, value, kc: BOSS_NO_LOOT_FALLBACK.has(d.source) ? null : d.kc ?? null, items,
-      kills: BOSS_NO_LOOT_FALLBACK.has(d.source) ? 0 : Math.max(1, d.kills ?? 1), gap: !!d.gap, known });
+    // Only a Gauntlet chest holding crystal shards is a kill; Doom rewards never count (hiscores only)
+    const isKill = GAUNTLET_LOOT.has(d.source) ? !d.gap && items.some(([id]) => id === CRYSTAL_SHARD) : !BOSS_NO_LOOT_FALLBACK.has(d.source);
+    out.push({ t: new Date(d.t), key: `${d.type}|${d.source}`, type: d.type, name: d.source, value, kc: isKill ? d.kc ?? null : null, items,
+      kills: isKill ? Math.max(1, d.kills ?? 1) : 0, gap: !!d.gap, known });
   }
   return (state.killLog = out.sort((a, b) => b.t - a.t));
 }
