@@ -966,6 +966,27 @@ button.dt:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
 .dd-head .pos { color: var(--green); }
 .dd-close { margin-left: auto; border: 1px solid var(--border); background: var(--bg); color: var(--text-2); border-radius: 8px; width: 28px; height: 28px; }
 .dd-close:hover { color: var(--text); border-color: var(--border-strong); }
+
+/* Readiness: how close you are to a quest's / diary tier's requirements (--rd: red -> amber -> green) */
+.q-list .q { grid-template-columns: 10px minmax(0, 1fr) auto auto; }
+/* Narrow list: the dot already shows the quest state, so the readiness tag gets the room */
+.q-list { container-type: inline-size; }
+@container (max-width: 420px) { .q-list .q { grid-template-columns: 10px minmax(0, 1fr) auto; } .q-list .q .q-state { display: none; } }
+.rd {
+  position: relative; display: inline-block; min-width: 46px; padding: 2px 8px 4px; border-radius: 999px; white-space: nowrap;
+  text-align: center; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--rd);
+  background: color-mix(in srgb, var(--rd) 12%, transparent); border: 1px solid color-mix(in srgb, var(--rd) 35%, transparent);
+}
+.rd i { position: absolute; left: 8px; bottom: 1px; height: 2px; max-width: calc(100% - 16px); border-radius: 2px; background: var(--rd); }
+.rd.ok { background: color-mix(in srgb, var(--rd) 20%, transparent); border-color: color-mix(in srgb, var(--rd) 60%, transparent); }
+.rd.ok i { display: none; }
+.dd-head .rd { margin-left: auto; align-self: center; font-size: 12px; font-weight: 700; }
+.dd-head .rd + .dd-close { margin-left: 0; }
+button.dt.rd-cell { border-color: color-mix(in srgb, var(--rd) 75%, transparent); background: color-mix(in srgb, var(--rd) 13%, var(--bg)); }
+button.dt.rd-cell b { color: var(--rd); }
+button.dt.rd-cell:hover { border-color: var(--rd); }
+button.dt.rd-ok::after { content: ""; position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.rd-count { font-style: normal; color: var(--green); font-weight: 600; }
 .dd-sec { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 10px; align-items: start; margin-bottom: 12px; }
 .dd-label { font-size: 12px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); font-weight: 600; padding-top: 5px; }
 .dd-chips { display: flex; flex-wrap: wrap; gap: 6px; }

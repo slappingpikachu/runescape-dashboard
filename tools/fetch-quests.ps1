@@ -3,7 +3,7 @@
 #   powershell -ExecutionPolicy Bypass -File tools\fetch-quests.ps1
 #
 # quest-reqs.json: {"<quest name>": {"skills": [[skill, level, boostable]], "quests": [[quest name, depth]],
-#                   "qp": n, "combat": n, "extra": [text], "items": [text]}}
+#                   "qp": n, "combat": n, "extra": [text], "items": [text], "reward": quest points given}}
 # Names use RuneLite's spelling for Recipe for Disaster parts ("Recipe for Disaster - Pirate Pete"); everything else
 # is the wiki page title. The page matches names with punctuation and case ignored (The Writing's / Writings).
 # "quests" is the prerequisite tree in wiki order: depth 0 = needed directly, 1 = needed by the one above, ...
@@ -102,7 +102,11 @@ for ($i = 0; $i -lt $titles.Count; $i += 50) {
       $c = Clean ($line.Trim() -replace '^\*+\s*', '')
       if ($c -and $c -notmatch '^(None|N/A)\.?$') { $items += $c }
     }
-    $out[(Get-QuestName $page.title)] = [ordered]@{ skills = $skills; quests = $quests; qp = $qp; combat = $combat; extra = $extra; items = $items }
+    # Quest points the quest gives ("Quest rewards" box), so the page can add up yours from finished quests
+    $rm = [regex]::Match($w, '(?s)\{\{Quest rewards.*?\|\s*qp\s*=\s*(\d+)')
+    $reward = if ($rm.Success) { [int]$rm.Groups[1].Value } else { 0 }
+    if ($page.title -eq "Recipe for Disaster") { $reward = 0 }   # its 10 points are on the 10 subquests
+    $out[(Get-QuestName $page.title)] = [ordered]@{ skills = $skills; quests = $quests; qp = $qp; combat = $combat; extra = $extra; items = $items; reward = $reward }
   }
 }
 

@@ -1450,31 +1450,41 @@ function renderQuests() {
   const noun = kind === "mini" ? "miniquest" : "quest";
   const by = { done: [], started: [], todo: [] };
   for (const [name, s] of quests) by[QUEST_STATES[s] ?? "todo"].push(name);
+  // Readiness of every unfinished quest (requirements vs your levels / quests)
+  const ready = new Map([...by.started, ...by.todo].map((n) => [n, questReadiness(n, w)]));
+  const canDo = [...by.started, ...by.todo].filter((n) => ready.get(n)?.ready);
   const filter = state.questFilter ?? "open";
-  const shown = filter === "done" ? by.done : filter === "all" ? quests.map(([n]) => n) : [...by.started, ...by.todo];
+  const shown = filter === "done" ? by.done : filter === "all" ? quests.map(([n]) => n) : filter === "ready" ? canDo : [...by.started, ...by.todo];
   const pct = (by.done.length / quests.length * 100).toFixed(1);
   const questRow = (name) => {
     const s = QUEST_STATES[w.quests[name]] ?? "todo";
     const label = { done: "Completed", started: "In Progress", todo: "Not Started" }[s];
     const open = state.questPick === name;
+    const r = ready.get(name);
+    const tag = r ? `<span class="rd ${r.ready ? "ok" : ""}" style="--rd:${readyColor(r)}" title="${esc(readyTip(r))}">${r.ready ? "Ready" : `${Math.floor(r.pct * 100)}%`}<i style="width:${(r.pct * 100).toFixed(0)}%"></i></span>` : "<span></span>";
     return `<li class="q ${s} ${open ? "open" : ""}" data-quest="${esc(name)}" role="button" tabindex="0" aria-expanded="${open}">
-      <span class="q-dot" title="${label}"></span><span class="q-name">${esc(name)}</span><span class="q-state">${label}</span></li>
+      <span class="q-dot" title="${label}"></span><span class="q-name">${esc(name)}</span>${tag}<span class="q-state">${label}</span></li>
       ${open ? `<li class="q-req">${questDetail(name, w)}</li>` : ""}`;
   };
 
   // Diaries: region x tier grid
   const regions = Object.keys(w.diaries).sort();
   // A tier the plugin reports as unfinished has no task count (done = null): it only knows whole tiers
-  let tiersDone = 0, tiersAll = 0, tasksDone = 0, tasksAll = 0, unknown = 0;
+  let tiersDone = 0, tiersAll = 0, tasksDone = 0, tasksAll = 0, unknown = 0, tiersReady = 0;
   const cells = regions.map((r) => {
     const row = DIARY_TIERS.map((t) => {
       const [d, n] = w.diaries[r][t] ?? [0, 0];
       if (!n) return `<td></td>`;
       tiersAll++; tasksAll += n; tasksDone += d ?? 0; if (d == null) unknown++;
       const key = `${r}|${t}`, sel = state.diaryPick === key ? "sel" : "";
-      if (d == null) return `<td><button type="button" class="dt none ${sel}" data-diary="${esc(key)}" title="${esc(r)} ${t}: not finished (${n} tasks)"><b>–</b>/${n}</button></td>`;
-      if (d >= n) { tiersDone++; return `<td><button type="button" class="dt done ${sel}" data-diary="${esc(key)}" title="${esc(r)} ${t}: complete">✓</button></td>`; }
-      return `<td><button type="button" class="dt ${d ? "part" : "none"} ${sel}" data-diary="${esc(key)}" title="${esc(r)} ${t}: ${d} of ${n} tasks"><b>${d}</b>/${n}<i style="width:${(d / n * 100).toFixed(0)}%"></i></button></td>`;
+      if (d != null && d >= n) { tiersDone++; return `<td><button type="button" class="dt done ${sel}" data-diary="${esc(key)}" title="${esc(r)} ${t}: complete">✓</button></td>`; }
+      // Unfinished: border colour = how close you are to the tier's requirements, green dot = all met
+      const rd = diaryReadiness(state.diaryInfo?.[r]?.[t], w);
+      if (rd?.ready) tiersReady++;
+      const rdAttr = rd ? ` rd-cell${rd.ready ? " rd-ok" : ""}" style="--rd:${readyColor(rd)}` : "";
+      const tip = `${r} ${t}: ${d == null ? `not finished (${n} tasks)` : `${d} of ${n} tasks`}${rd ? ` · ${readyTip(rd)}` : ""}`;
+      if (d == null) return `<td><button type="button" class="dt none ${sel}${rdAttr}" data-diary="${esc(key)}" title="${esc(tip)}"><b>–</b>/${n}</button></td>`;
+      return `<td><button type="button" class="dt ${d ? "part" : "none"} ${sel}${rdAttr}" data-diary="${esc(key)}" title="${esc(tip)}"><b>${d}</b>/${n}<i style="width:${(d / n * 100).toFixed(0)}%"></i></button></td>`;
     }).join("");
     const all = DIARY_TIERS.every((t) => { const [d, n] = w.diaries[r][t] ?? [0, 0]; return n && d != null && d >= n; });
     return `<tr class="${all ? "all" : ""}"><th>${esc(r)}</th>${row}</tr>`;
@@ -1500,14 +1510,15 @@ function renderQuests() {
         </div>
         <div class="pill-toggle" id="quest-filter">
           <button data-qf="open" class="${filter === "open" ? "active" : ""}">To Do (${by.started.length + by.todo.length})</button>
+          <button data-qf="ready" class="${filter === "ready" ? "active" : ""}">Can Do (${canDo.length})</button>
           <button data-qf="done" class="${filter === "done" ? "active" : ""}">Completed (${by.done.length})</button>
           <button data-qf="all" class="${filter === "all" ? "active" : ""}">All</button>
         </div>
-        <ul class="q-list">${shown.length ? shown.map(questRow).join("") : `<li class="muted small">${filter === "done" ? `No ${noun}s completed yet.` : `Every ${noun} is done!`}</li>`}</ul>
+        <ul class="q-list">${shown.length ? shown.map(questRow).join("") : `<li class="muted small">${filter === "done" ? `No ${noun}s completed yet.` : filter === "ready" ? `No ${noun} has all its requirements met yet.` : `Every ${noun} is done!`}</li>`}</ul>
       </div>
       <div class="qd-diaries">
         <div class="qd-sum">
-          <div><img src="${wikiIcon("Achievement_Diaries_icon.png")}" alt="" class="qd-ic"><b>${tiersDone}</b><span>/ ${tiersAll} diaries complete${unknown ? "" : ` · ${tasksDone} / ${tasksAll} tasks`}</span></div>
+          <div><img src="${wikiIcon("Achievement_Diaries_icon.png")}" alt="" class="qd-ic"><b>${tiersDone}</b><span>/ ${tiersAll} diaries complete${unknown ? "" : ` · ${tasksDone} / ${tasksAll} tasks`}${tiersReady ? ` · <em class="rd-count">${tiersReady} ready</em>` : ""}</span></div>
         </div>
         <div class="diary-wrap"><table class="diary">
           <thead><tr><th></th>${DIARY_TIERS.map((t) => `<th>${t}</th>`).join("")}</tr></thead>
@@ -1539,6 +1550,67 @@ function questStateOf(name, w) {
   return questIndex.states2.get(questKey(name));
 }
 
+// Your quest points: the wiki's points for each finished quest
+const myQuestPoints = (w) => Object.entries(w.quests ?? {}).reduce((t, [n, s]) => t + (s === 2 ? questReqsOf(n)?.reward ?? 0 : 0), 0);
+
+// How close you are to a set of requirements ({skills: [[skill, level]], combat, qp, quests: [names]}).
+// Skills count by XP (so 10 levels short at 80 is far, not 88%), quests in progress count half.
+// pct = average over the requirements NOT met yet (met ones would make every Elite look ~90% done);
+// ready = all met. Items and other text requirements can't be checked.
+function readiness(req, w) {
+  const skills = state.history.at(-1)?.skills ?? {};
+  const mini = new Set(state.miniquests ?? []);
+  const parts = [], missing = [];
+  for (const [s, lvl] of req.skills ?? []) {
+    const lv = skills[s]?.level ?? 1;
+    if (lv >= lvl) { parts.push(1); continue; }
+    parts.push(Math.min(1, (skills[s]?.xp ?? 0) / XP_TABLE[Math.min(lvl, 99)]));
+    missing.push(`${lvl} ${s} (${lv})`);
+  }
+  if (req.combat) {
+    const cb = combatLevel(skills);
+    parts.push(Math.min(1, cb / req.combat));
+    if (cb < req.combat) missing.push(`${req.combat} Combat (${cb})`);
+  }
+  if (req.qp) {
+    const qp = myQuestPoints(w);
+    parts.push(Math.min(1, qp / req.qp));
+    if (qp < req.qp) missing.push(`${req.qp} Quest Points (${qp})`);
+  }
+  for (const q of new Set(req.quests ?? [])) {
+    if (q === "All quests") {
+      const sts = Object.entries(w.quests ?? {}).filter(([n]) => !mini.has(n)).map(([, s]) => s);
+      const done = sts.filter((s) => s === 2).length;
+      parts.push(sts.length ? done / sts.length : 0);
+      if (done < sts.length) missing.push(`All Quests (${sts.length - done} left)`);
+      continue;
+    }
+    const st = questStateOf(q, w);
+    parts.push(st === 2 ? 1 : st === 1 ? 0.5 : 0);
+    if (st !== 2) missing.push(q);
+  }
+  const open = parts.filter((p) => p < 1);
+  const pct = open.length ? open.reduce((a, b) => a + b, 0) / open.length : 1;
+  return { pct: missing.length ? Math.min(pct, 0.99) : 1, ready: !missing.length, missing };
+}
+// Red (far) -> amber -> green (ready)
+const readyColor = (r) => (r.ready ? "var(--green)" : `hsl(${Math.round(r.pct * 95)} 88% 62%)`);
+const readyTip = (r) => (r.ready ? "Skills and quests met" : `${Math.floor(r.pct * 100)}% there · missing: ${r.missing.join(", ")}`);
+const questReadiness = (name, w) => {
+  const r = questReqsOf(name);
+  return r ? readiness({ skills: r.skills ?? [], combat: r.combat, qp: r.qp, quests: (r.quests ?? []).map(([q]) => q) }, w) : null;
+};
+const diaryReadiness = (info, w) => {
+  const skills = Object.entries(info?.skills ?? {}).filter(([s]) => s !== "Combat" && s !== "Quest");
+  const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]).filter((x) => typeof x === "string" && x.trim());
+  return info ? readiness({ skills, combat: info.skills?.Combat, qp: info.skills?.Quest, quests: list(info.quests) }, w) : null;
+};
+
+const qpChip = (need, w) => {
+  const qp = myQuestPoints(w);
+  return `<span class="dd-chip ${qp >= need ? "ok" : "no"}" title="You have ${qp} quest points"><img src="${wikiIcon("Quest_point_icon.png")}" alt="">${need} Quest Points</span>`;
+};
+
 // Requirements of the clicked quest (OSRS Wiki), checked against your levels and finished quests
 function questDetail(name, w) {
   const r = questReqsOf(name);
@@ -1554,7 +1626,7 @@ function questDetail(name, w) {
   const chips = [
     ...list(r.skills).map(([s, lvl, boost]) => chip(s, lvl, boost)),
     r.combat ? chip("Combat", r.combat, null) : "",
-    r.qp ? `<span class="dd-chip"><img src="${wikiIcon("Quest_point_icon.png")}" alt="">${r.qp} Quest Points</span>` : "",
+    r.qp ? qpChip(r.qp, w) : "",
   ].join("");
   const quests = list(r.quests).map(([q, depth]) => {
     const st = questStateOf(q, w);
@@ -1580,23 +1652,33 @@ function diaryDetail(w) {
   const list = (v) => (v == null ? [] : Array.isArray(v) ? v : [v]);
   // An empty wiki cell is saved as {}: show text entries only
   const texts = (v) => list(v).filter((x) => typeof x === "string" && x.trim());
-  const info = raw && { skills: raw.skills ?? {}, quests: texts(raw.quests), extra: texts(raw.extra), tasks: list(raw.tasks).map((x) => ({ ...x, req: texts(x.req) })) };
+  const info = raw && { skills: raw.skills ?? {}, noBoost: new Set(texts(raw.noBoost)), quests: texts(raw.quests), extra: texts(raw.extra), tasks: list(raw.tasks).map((x) => ({ ...x, req: texts(x.req) })) };
   const [d, n, flags = ""] = w.diaries[r]?.[t] ?? [0, 0, ""];
-  const head = `<div class="dd-head"><h4>${esc(r)} · ${t}</h4><span class="${d != null && d >= n ? "pos" : "muted"}">${d == null ? "Not Finished" : d >= n ? "Complete" : `${d} / ${n} tasks`}</span>
+  let head = `<div class="dd-head"><h4>${esc(r)} · ${t}</h4><span class="${d != null && d >= n ? "pos" : "muted"}">${d == null ? "Not Finished" : d >= n ? "Complete" : `${d} / ${n} tasks`}</span>
     <button type="button" class="dd-close" data-diary-close title="Close">✕</button></div>`;
   if (!info) return head + `<p class="muted small">Task details aren't saved yet.</p>`;
+  if (!(d != null && d >= n)) {
+    const rd = diaryReadiness(raw, w);
+    head = head.replace(`<button type="button" class="dd-close"`, `<span class="rd ${rd.ready ? "ok" : ""}" style="--rd:${readyColor(rd)}" title="${esc(readyTip(rd))}">${rd.ready ? "Ready" : `${Math.floor(rd.pct * 100)}% Ready`}<i style="width:${(rd.pct * 100).toFixed(0)}%"></i></span><button type="button" class="dd-close"`);
+  }
 
   const skills = state.history.at(-1)?.skills ?? {};
   const have = (s) => (s === "Combat" ? combatLevel(skills) : skills[s]?.level ?? 1);
   const skillChips = Object.entries(info.skills).map(([s, lvl]) => {
-    if (s === "Quest") return `<span class="dd-chip"><img src="${wikiIcon("Quest_point_icon.png")}" alt="">${lvl} quest points</span>`;
+    if (s === "Quest") return qpChip(lvl, w);
     const ok = have(s) >= lvl;
-    return `<span class="dd-chip ${ok ? "ok" : "no"}" title="You have ${have(s)} ${s}"><img src="${s === "Combat" ? wikiIcon("Combat_icon.png") : skillIcon(s)}" alt="">${lvl} ${esc(s)}</span>`;
+    return `<span class="dd-chip ${ok ? "ok" : "no"}" title="You have ${have(s)} ${s}${info.noBoost.has(s) ? " · can't be boosted" : ""}"><img src="${s === "Combat" ? wikiIcon("Combat_icon.png") : skillIcon(s)}" alt="">${lvl} ${esc(s)}</span>`;
   }).join("");
+  // "All quests" (Lumbridge Elite's quest cape task): every quest done, miniquests not needed
+  const mini = new Set(state.miniquests ?? []);
+  const allQuests = () => {
+    const sts = Object.entries(w.quests ?? {}).filter(([n]) => !mini.has(n)).map(([, s]) => s);
+    return !sts.length ? undefined : sts.every((s) => s === 2) ? 2 : sts.some((s) => s > 0) ? 1 : 0;
+  };
   const questChips = info.quests.map((q) => {
-    const st = w.quests[q];
+    const st = q === "All quests" ? allQuests() : w.quests[q];
     const cls = st === 2 ? "ok" : st === 1 ? "mid" : st === 0 ? "no" : "";
-    return `<span class="dd-chip ${cls}" title="${st === 2 ? "Completed" : st === 1 ? "In Progress" : st === 0 ? "Not Started" : ""}">${st === 2 ? "✓ " : ""}${esc(q)}</span>`;
+    return `<span class="dd-chip ${cls}" title="${st === 2 ? "Completed" : st === 1 ? "In Progress" : st === 0 ? "Not Started" : ""}">${st === 2 ? "✓ " : ""}${esc(q === "All quests" ? "All Quests" : q)}</span>`;
   }).join("");
   const tasks = info.tasks.map((x, i) => {
     const done = flags[i] === "1";
