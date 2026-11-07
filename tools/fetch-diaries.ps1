@@ -31,13 +31,39 @@ foreach ($region in $Regions) {
   foreach ($tier in $Tiers) {
     # Overview tab: skills, quests and other requirements for the whole tier
     $tab = [regex]::Match($w, "(?s)\|-\|\s*$tier=(.*?)(?=\|-\||</tabber>)").Groups[1].Value
+    # The skill box holds nested templates ({{boostable|n}}) and footnotes, so find its end by
+    # counting braces: a plain "up to the first }}" match cut the list short.
     $skills = [ordered]@{}
-    $stats = [regex]::Match($tab, '(?s)\{\{DiarySkillStats(.*?)\}\}').Groups[1].Value
+    $noBoost = @()
+    $stats = ""
+    $i = $tab.IndexOf("{{DiarySkillStats")
+    if ($i -ge 0) {
+      $depth = 0; $j = $i
+      while ($j -lt $tab.Length - 1) {
+        $two = $tab.Substring($j, 2)
+        if ($two -eq "{{") { $depth++; $j += 2; continue }
+        if ($two -eq "}}") { $depth--; $j += 2; if ($depth -eq 0) { break }; continue }
+        $j++
+      }
+      $stats = $tab.Substring($i, $j - $i)
+    }
     foreach ($m in [regex]::Matches($stats, '(?m)^\|\s*([A-Za-z]+)\s*=\s*(\d+)\s*$')) {
       $k = $m.Groups[1].Value
-      if ($k -notin "maxrefs", "Total") { $skills[$k] = [int]$m.Groups[2].Value }
+      # Level 1 entries only carry an ironman footnote: no real requirement
+      if ($k -notin "maxrefs", "Total" -and [int]$m.Groups[2].Value -gt 1) { $skills[$k] = [int]$m.Groups[2].Value }
+    }
+    # Lumbridge Elite: "Quest = {{Globals|quest points}}" (every quest point), ask the wiki for the number
+    $qp = [regex]::Match($stats, '(?m)^\|\s*Quest\s*=\s*(\{\{.*\}\})\s*$')
+    if ($qp.Success) {
+      $x = Invoke-WebRequest -Uri ("https://oldschool.runescape.wiki/api.php?action=expandtemplates&prop=wikitext&format=json&formatversion=2&text=" + [uri]::EscapeDataString($qp.Groups[1].Value)) -UseBasicParsing -TimeoutSec 30 -UserAgent $UA
+      $n = (($x.Content | ConvertFrom-Json).expandtemplates.wikitext -replace '[^\d]', '')
+      if ($n) { $skills["Quest"] = [int]$n }
+    }
+    foreach ($m in [regex]::Matches($stats, '(?m)^\|\s*([A-Za-z]+)Notes\s*=.*\{\{[Bb]oostable\|n\}\}')) {
+      if ($skills.Contains($m.Groups[1].Value)) { $noBoost += $m.Groups[1].Value }
     }
     $quests = @([regex]::Matches($tab, 'data-rowid="([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+    if ($tab -match '\[\[Quests/List\|All quests\]\]') { $quests += "All quests" }
     $extra = @()
     $add = [regex]::Match($tab, '(?s)!\s*Additional requirements(.*?)\n\|\}').Groups[1].Value
     foreach ($line in ($add -split "\n\|-\s*\n")) { $t = Clean ($line -replace '^\s*\|', ''); if ($t) { $extra += $t } }
@@ -54,7 +80,7 @@ foreach ($region in $Regions) {
       $req = if ($cells.Count -gt 1) { @(($cells[1] -split "\n\*") | ForEach-Object { Clean $_ } | Where-Object { $_ -and $_ -ne "None" }) } else { @() }
       $tasks += [ordered]@{ task = (Clean $text); note = (Clean $note); req = $req }
     }
-    $tierData[$tier] = [ordered]@{ skills = $skills; quests = $quests; extra = $extra; tasks = $tasks }
+    $tierData[$tier] = [ordered]@{ skills = $skills; noBoost = $noBoost; quests = $quests; extra = $extra; tasks = $tasks }
   }
   $out[$region] = $tierData
   "{0}: {1}" -f $region, (($Tiers | ForEach-Object { "$_ $($tierData[$_].tasks.Count)" }) -join ", ")
