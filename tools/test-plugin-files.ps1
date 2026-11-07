@@ -132,6 +132,24 @@ Set-PluginFiles @{ "killcounts.json" = "{""updated"":""$(& $iso $now)"",""killCo
 Check "edge: odd names in kill history" { Reset-Data; [void](Update-PluginKills "2026-11-02T12:00:00.0000000Z"); $l = Parse ([IO.File]::ReadAllLines($KillHistoryFile)[-1]); $n = @($l.k.PSObject.Properties.Name)
   if ($n -notcontains "NPC|Kree'arra" -or $n -notcontains 'EVENT|Reward pool ("x")') { throw ($n -join ' / ') }; "Kree'arra, quotes ok" }
 
+# ---------------------------------------------------------------- 2a. Grand Exchange offers on bank lines
+$geFile = { param($ge) "{""updated"":""$(& $iso $now)"",""bank"":[[995,10,0]],""bankAt"":1793608110328,""inventory"":[],""equipment"":[],""ge"":$ge}" }
+$geOffer = "{""slot"":2,""state"":""SELLING"",""id"":1391,""total"":68,""done"":0,""price"":7879,""spent"":0}"
+$bankLines = { @([IO.File]::ReadAllLines("$DataDir\bank\history.jsonl") | Where-Object { $_.Trim() }) }
+Set-PluginFiles @{ "containers.json" = (& $geFile "[]") }
+Check "ge: no offers on the first line = empty list" { Reset-Data; [void](Update-Bank); $l = @(& $bankLines)[-1]; if ($l -notmatch ',"ge":\[\]\}$') { throw $l }; "ok" }
+Set-PluginFiles @{ "containers.json" = (& $geFile "[$geOffer]") }
+Check "ge: a new offer writes a line, ge as last field" { [void](Update-Bank); $l = @(& $bankLines); if ($l.Count -ne 2) { throw "$($l.Count) lines" }
+  if (-not $l[-1].EndsWith(',"ge":[{"item":[1391,68],"done":0,"price":7879,"spent":0,"state":"SELLING"}]}')) { throw $l[-1] }; [void](Parse $l[-1]); "ok" }
+Check "ge: same offer on the next Refresh writes nothing" { [void](Update-Bank); $n = @(& $bankLines).Count; if ($n -ne 2) { throw "$n lines" }; "still 2" }
+Set-PluginFiles @{ "containers.json" = (& $geFile ($geOffer -replace '"done":0', '"done":5' -replace '"spent":0', '"spent":39395')) }
+Check "ge: a part fill writes a line" { [void](Update-Bank); $n = @(& $bankLines).Count; if ($n -ne 3) { throw "$n lines" }; "3 lines" }
+Set-PluginFiles @{ "containers.json" = (& $geFile "[]") }
+Check "ge: a collected offer writes a line" { [void](Update-Bank); $n = @(& $bankLines).Count; if ($n -ne 4) { throw "$n lines" }; "4 lines" }
+Set-PluginFiles @{ "containers.json" = "{""updated"":""$(& $iso $now)"",""bank"":[[995,10,0]],""bankAt"":1793608110328,""inventory"":[],""equipment"":[]}" }
+Check "ge: old plugin file without ge writes nothing" { [void](Update-Bank); $l = @(& $bankLines); if ($l.Count -ne 4) { throw "$($l.Count) lines" }; "ok" }
+Check "ge: old plugin file gives a line without ge" { Reset-Data; [void](Update-Bank); $l = @(& $bankLines)[-1]; if ($l -match '"ge"') { throw $l }; "ok" }
+
 # ---------------------------------------------------------------- 2b. Drop log gaps (kills done without the plugin)
 # Loot Tracker totals (killcounts.json) vs loot.jsonl: every type (monster, boss, clue, chest, pickpocket) must end up
 # in the drop log exactly once, with the right drops

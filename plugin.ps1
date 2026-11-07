@@ -236,6 +236,8 @@ function Get-PluginContainers {
     runePouch = if ($c.PSObject.Properties['runePouch']) { & $conv $c.runePouch } else { $null }
     # Inventory as laid out in game: [slot, id, qty] (plugin versions from 2026-11-01 send the slot third)
     invLayout = @(foreach ($p in @($c.inventory)) { if ($p -and @($p).Count -ge 3) { , @([int]$p[2], [int]$p[0], [long]$p[1]) } })
+    # Grand Exchange offers as the JSON text of a bank history line; $null from plugin versions that didn't send them
+    ge = if ($c.PSObject.Properties['ge']) { "[" + (@(foreach ($o in @($c.ge)) { if ($o) { "{""item"":[$([long]$o.id),$([long]$o.total)],""done"":$([long]$o.done),""price"":$([long]$o.price),""spent"":$([long]$o.spent),""state"":""$($o.state)""}" } }) -join ",") + "]" } else { $null }
     bankAt = [long]$c.bankAt
     updated = [DateTime]::Parse([string]$c.updated, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind)
   }

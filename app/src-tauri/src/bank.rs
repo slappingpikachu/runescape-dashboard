@@ -102,8 +102,9 @@ fn local_stamp(t: chrono::DateTime<chrono::Utc>) -> String {
 pub fn update(ctx: &Ctx) -> Res<String> {
     ensure_dir(&dir(ctx));
     let hist = dir(ctx).join("history.jsonl");
-    let prev: Option<Value> = match last_line(&hist) {
-        Some(l) => Some(parse(&l)?),
+    let last = last_line(&hist);
+    let prev: Option<Value> = match &last {
+        Some(l) => Some(parse(l)?),
         None => None,
     };
     let Some(plug) = crate::plugin::containers(ctx)? else {
@@ -119,8 +120,12 @@ pub fn update(ctx: &Ctx) -> Res<String> {
     let carried = from_item_list(&plug.inventory);
     let pouch = plug.rune_pouch.as_ref().map(from_item_list);
 
+    // Offers are part of what's owned (the page counts them), so a change is a new line. No offers = same as a line without "ge"
+    let no_empty = |s: &str| if s == "[]" { String::new() } else { s.to_string() };
+    let ge_text = plug.ge.as_deref().map(no_empty).unwrap_or_default();
+    let prev_ge = last.as_deref().and_then(|l| LINE_GE.captures(l)).map(|c| no_empty(&c[1])).unwrap_or_default();
     let now_sig = format!(
-        "{}|{}|{}|True|{}",
+        "{}|{}|{}|True|{}|{ge_text}",
         pairs_json(&items),
         pairs_json(&worn),
         pairs_json(&carried),
@@ -128,7 +133,7 @@ pub fn update(ctx: &Ctx) -> Res<String> {
     );
     let before = prev.as_ref().map(|p| {
         format!(
-            "{}|{}|{}|{}|{}",
+            "{}|{}|{}|{}|{}|{prev_ge}",
             value_pairs_json(prop(p, "items")),
             value_pairs_json(prop(p, "worn")),
             value_pairs_json(prop(p, "carried")),
@@ -141,8 +146,9 @@ pub fn update(ctx: &Ctx) -> Res<String> {
     if before.as_deref() != Some(now_sig.as_str()) {
         let t = iso(now());
         let pouch_json = pouch.as_ref().map(|p| format!(",\"pouch\":{}", pairs_json(p))).unwrap_or_default();
+        let ge_json = plug.ge.as_ref().map(|g| format!(",\"ge\":{g}")).unwrap_or_default();
         let line = format!(
-            "{{\"t\":\"{t}\",\"saved\":{},\"src\":\"plugin\",\"items\":{},\"worn\":{},\"carried\":{}{pouch_json}}}",
+            "{{\"t\":\"{t}\",\"saved\":{},\"src\":\"plugin\",\"items\":{},\"worn\":{},\"carried\":{}{pouch_json}{ge_json}}}",
             ps_str(&saved),
             pairs_json(&items),
             pairs_json(&worn),
@@ -466,6 +472,7 @@ static KC_DROPS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""drops":\{([^}
 static KC_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""(\d+)":"#).unwrap());
 static GE_LIST: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""ge"\s*:\s*\[([^\]]*)\]"#).unwrap());
 static GE_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""id"\s*:\s*(\d+)"#).unwrap());
+static LINE_GE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#","ge":(\[.*\])\}$"#).unwrap());
 
 // Item ids in the plugin's current Grand Exchange offers (containers.json "ge")
 fn ge_ids(ctx: &Ctx) -> Vec<String> {

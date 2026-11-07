@@ -4,8 +4,9 @@
 # ConvertTo-Hash). Read on Refresh.
 #
 # data\bank\history.jsonl  one line per change: {"t":read ISO,"saved":"<bank time>","src":"plugin",
-#                          "items":[[id,qty],...] (bank order, no placeholders), "worn":[[id,qty]],"carried":[[id,qty]]}
-#                          Older lines carry other src tags (app.js SAVE_KIND reads them; never rewritten).
+#                          "items":[[id,qty],...] (bank order, no placeholders), "worn":[[id,qty]],"carried":[[id,qty]],
+#                          "ge":[{"item":[id,total],"done":n,"price":gp,"spent":gp,"state":"SELLING"}]}  (last field)
+#                          Older lines have no "ge" and carry other src tags (app.js SAVE_KIND reads them; never rewritten).
 # data\bank\items.json     id -> [name, wiki image file]   (looked up when an id is new)
 # EVERY price file below holds only YOUR items (Get-BankPriceIds: bank ever, logged, loot + valuation parts).
 # The wiki price API always sends every item in one response; the rest is never saved.
@@ -77,8 +78,12 @@ function Update-Bank {
 
   # Written by hand: PS 5.1's ConvertTo-Json turns arrays that went through a pipeline into {"value":..,"Count":..}
   $toJson = { param($list) "[" + ((@(foreach ($p in @($list)) { if ($p) { "[$([long]$p[0]),$([long]$p[1])]" } })) -join ",") + "]" }
-  $now = "$(& $toJson $items)|$(& $toJson $worn)|$(& $toJson $carried)|$hasOut|$(if ($null -ne $pouch) { & $toJson $pouch })"
-  $before = if ($prev) { "$(& $toJson $prev.items)|$(& $toJson $prev.worn)|$(& $toJson $prev.carried)|$([bool]$prev.PSObject.Properties['worn'])|$(if ($prev.PSObject.Properties['pouch']) { & $toJson $prev.pouch })" }
+  # Offers are part of what's owned (the page counts them), so a change is a new line. No offers = same as a line without "ge"
+  $geText = if ($plug.ge -and $plug.ge -ne "[]") { $plug.ge } else { "" }
+  $prevGe = [regex]::Match([string]$last, ',"ge":(\[.*\])\}$').Groups[1].Value
+  if ($prevGe -eq "[]") { $prevGe = "" }
+  $now = "$(& $toJson $items)|$(& $toJson $worn)|$(& $toJson $carried)|$hasOut|$(if ($null -ne $pouch) { & $toJson $pouch })|$geText"
+  $before = if ($prev) { "$(& $toJson $prev.items)|$(& $toJson $prev.worn)|$(& $toJson $prev.carried)|$([bool]$prev.PSObject.Properties['worn'])|$(if ($prev.PSObject.Properties['pouch']) { & $toJson $prev.pouch })|$prevGe" }
   $changed = $now -ne $before
   $status = "no change"
   $lineT = $null
@@ -86,8 +91,9 @@ function Update-Bank {
     $lineT = (Get-Date).ToUniversalTime().ToString("o")
     # Rune pouch (the game keeps it out of every item list; the plugin reads it), when the plugin sent it
     $pouchJson = if ($null -ne $pouch) { ',"pouch":' + (& $toJson $pouch) } else { "" }
+    $geJson = if ($null -ne $plug.ge) { ',"ge":' + $plug.ge } else { "" }
     $line = "{""t"":""$lineT"",""saved"":$(ConvertTo-Json $saved),""src"":""$src""," +
-      """items"":$(& $toJson $items),""worn"":$(& $toJson $worn),""carried"":$(& $toJson $carried)$pouchJson}"
+      """items"":$(& $toJson $items),""worn"":$(& $toJson $worn),""carried"":$(& $toJson $carried)$pouchJson$geJson}"
     [IO.File]::AppendAllText($histFile, $line + "`n", $Utf8)
     $status = "saved ($($items.Count) items, $($worn.Count) worn, $($carried.Count) carried)"
   }

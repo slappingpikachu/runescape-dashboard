@@ -1885,7 +1885,7 @@ function setBank(raw) {
   // older lines carry in data\bank\history.jsonl; the saved history is never changed.
   const some = (list) => (list ?? []).filter(([, q]) => q > 0);
   const lines = raw.history.map((l) => ({ t: new Date(l.t), key: l.t, saved: l.saved, src: SAVE_KIND[l.src] ?? "bank", gearKnown: false, items: l.items,
-    worn: some(l.worn), carried: some(l.carried), tracked: !!l.worn, guess: [], pouch: [], pouchSaved: l.pouch }));
+    worn: some(l.worn), carried: some(l.carried), tracked: !!l.worn, guess: [], pouch: [], pouchSaved: l.pouch, offers: l.ge ?? null, ge: l.ge ? geHeld(l.ge) : [] }));
   const first = lines.find((l) => l.tracked);
   // gear.t = the last Refresh that read the gear (before gear.json existed: the first tracked line)
   const liveAt = raw.gear?.t ? new Date(raw.gear.t) : first?.t ?? null;
@@ -1932,11 +1932,29 @@ function setBank(raw) {
     const l = lines[i], prev = lines[i - 1];
     if (l.src !== "plugin" || prev.src !== "plugin" || !l.saved || l.saved !== prev.saved) continue;
     const g0 = gearMap(prev), g1 = gearMap(l), bank = new Map(prev.items);   // prev.items: already corrected
+    const ge0 = new Map(prev.ge), ge1 = new Map(l.ge);
     for (const id of new Set([...g0.keys(), ...g1.keys()])) {
-      const d = (g0.get(id) ?? 0) - (g1.get(id) ?? 0);   // > 0: left the gear -> back in the bank
+      let d = (g0.get(id) ?? 0) - (g1.get(id) ?? 0);   // > 0: left the gear -> back in the bank
+      // ...unless it went into a Grand Exchange offer, or came out of one
+      const e = (ge0.get(id) ?? 0) - (ge1.get(id) ?? 0);
+      if (d * e < 0) d += Math.sign(e) * Math.min(Math.abs(d), Math.abs(e));
       if (d) bank.set(id, Math.max(0, (bank.get(id) ?? 0) + d));
     }
     l.items = [...bank].filter(([, q]) => q > 0);
+  }
+  // Saves from before offers were recorded: an item in the first recorded sell offers counts as in the GE on the saves
+  // just before it where it's missing. An item never seen in an older save stays out: nothing says when it arrived.
+  const firstGe = lines.findIndex((l) => l.offers);
+  if (firstGe > 0) for (const { item: [id, q], done, state: st } of lines[firstGe].offers) {
+    if (GE_STATES[st]?.[1] !== "sell") continue;
+    const total = (ownedMap(lines[firstGe]).get(id) ?? 0) + done, missing = [];
+    let i = firstGe - 1;
+    for (; i >= 0; i--) {
+      const have = ownedMap(lines[i]).get(id) ?? 0;
+      if (have >= total) break;
+      missing.push([lines[i], Math.min(q, total - have)]);
+    }
+    if (i >= 0) for (const [l, n] of missing) l.ge.push([id, n]);
   }
   // Older "bank" saves didn't know the gear. When the next save (which does know it) has exactly the same bank,
   // nothing moved in between, so the gear was the same too (otherwise a day can show -50M then +50M because
@@ -2000,16 +2018,17 @@ function setBank(raw) {
   };
   const valueAt = (l, table) => {
     const out = worthAt(l.worn, table) + worthAt(l.carried, table) + worthAt(l.guess, table) + worthAt(l.pouch, table);
-    return [worthAt(l.items, table) + out, out];
+    const ge = worthAt(l.ge, table);
+    return [worthAt(l.items, table) + out + ge, out, ge];
   };
   for (const l of lines) [l.value, l.outValue] = valueAt(l, tableFor(l));
   // What you own right now at today's prices (the newest save can be from an earlier day)
-  [state.bank.now, state.bank.nowOut] = valueAt(state.bank.cur, live);
+  [state.bank.now, state.bank.nowOut, state.bank.nowGe] = valueAt(state.bank.cur, live);
 }
-// Everything you own in one save: bank + worn + carried + the estimates (probably carried, rune pouch)
+// Everything you own in one save: bank + worn + carried + Grand Exchange + the estimates (probably carried, rune pouch)
 function ownedMap(line, withPouch = true) {
   const m = new Map();
-  for (const [id, q] of [...line.items, ...line.worn, ...line.carried, ...line.guess, ...(withPouch ? line.pouch : [])]) m.set(id, (m.get(id) ?? 0) + q);
+  for (const [id, q] of [...line.items, ...line.worn, ...line.carried, ...line.ge, ...line.guess, ...(withPouch ? line.pouch : [])]) m.set(id, (m.get(id) ?? 0) + q);
   return m;
 }
 
@@ -2121,7 +2140,7 @@ function renderBank() {
        <div class="bank-summary">
         <div class="bank-hero">
           <div class="clog-gp-top">
-            <div><span>Bank Value${out.length ? " (Incl. Worn &amp; Carried)" : ""}</span><b title="${Math.round(b.now).toLocaleString()} GP">${compact(b.now)} GP</b></div>
+            <div><span>Bank Value${b.cur.ge.length ? ` (Incl. ${out.length ? "Worn, Carried &amp; " : ""}GE)` : out.length ? " (Incl. Worn &amp; Carried)" : ""}</span><b title="${Math.round(b.now).toLocaleString()} GP${b.nowGe ? `\n${Math.round(b.nowGe).toLocaleString()} GP in the Grand Exchange` : ""}">${compact(b.now)} GP</b></div>
             <div class="clog-period" id="bank-period"></div>
           </div>
           <div id="bank-spark">${bankSparkHtml(secPeriod("bank"))}</div>
@@ -2310,6 +2329,17 @@ const GE_TAX_FREE = new Set([233, 315, 329, 347, 351, 355, 361, 365, 379, 558, 8
   2309, 2327, 2347, 2552, 3008, 3010, 3012, 3014, 3853, 5325, 5329, 5331, 5341, 5343, 8007, 8008, 8009, 8010, 8011, 8013, 8794, 13190, 28790, 28824]);
 const geTax = (id, each) => (GE_TAX_FREE.has(id) ? 0 : Math.min(GE_TAX_MAX, Math.floor(each * GE_TAX_RATE)));
 const geMarket = (id) => (state.bank.live ? bankValue(id, state.bank.live.prices).gp : bankPrice(id));
+// What saved offers hold until you collect them, as [id, qty] like the other lists: sell = items not sold yet + the
+// coins they brought in after tax, buy = items bought + coins not spent. An item is worth the same here as in the bank.
+function geHeld(offers) {
+  const held = new Map(), add = (id, q) => { if (q > 0) held.set(id, (held.get(id) ?? 0) + q); };
+  for (const { item: [id, total], done, price, spent, state: st } of offers) {
+    const side = GE_STATES[st]?.[1];
+    if (side === "sell") { add(id, total - done); if (done) add(995, Math.round(spent - done * geTax(id, spent / done))); }
+    else if (side === "buy") { add(id, done); add(995, total * price - spent); }
+  }
+  return [...held];
+}
 // What a sell offer brings in after tax against selling the same items at the GE price. Sold items use what they
 // really went for, the rest the asking price. A cancelled offer only counts what sold.
 function geSellResult(o, stage) {
@@ -2350,7 +2380,7 @@ function bankGeHtml() {
   const when = at.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) + (today ? "" : `, ${fmtDate(at, { month: "short", day: "numeric" })}`);
   return `<div class="bank-ge">
       <div class="bank-moves-head"><h3>Grand Exchange <span>· ${offers.length} of ${GE_SLOTS} Slots</span></h3>
-        <div class="moves-total"><small>Selling <b>${compact(left("sell"))} GP</b></small><small>Buying <b>${compact(left("buy"))} GP</b></small>
+        <div class="moves-total">${state.bank.nowGe ? `<small title="Counted in the Bank Value at GE prices, as of the last Update">In Bank Value <b>${compact(state.bank.nowGe)} GP</b></small>` : ""}<small>Selling <b>${compact(left("sell"))} GP</b></small><small>Buying <b>${compact(left("buy"))} GP</b></small>
           ${results.length ? `<small title="Every sell offer after tax, compared with the GE price">${geResultHtml(results.reduce((s, r) => s + r.gain, 0), "Sell ")}</small>` : ""}</div></div>
       <div class="ge-grid">${Array.from({ length: GE_SLOTS }, (_, i) => box(i + 1)).join("")}</div>
       <p class="muted small moves-note">Offers at ${esc(when)}</p>

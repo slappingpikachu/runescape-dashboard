@@ -254,6 +254,7 @@ pub struct Containers {
     pub inventory: Pairs,
     pub rune_pouch: Option<Pairs>,
     pub inv_layout: Vec<(i64, i64, i64)>, // [slot, id, qty]
+    pub ge: Option<String>,               // offers as the JSON text of a bank history line
     pub bank_at: i64,
     pub updated: DateTime<Utc>,
 }
@@ -276,7 +277,26 @@ pub fn containers(ctx: &Ctx) -> Res<Option<Containers>> {
         .filter(|p| truthy(p) && p.as_array().map(|a| a.len() >= 3).unwrap_or(false))
         .map(|p| (ps_long(p.get(2)), ps_long(p.get(0)), ps_long(p.get(1))))
         .collect();
+    let ge = prop(&c, "ge").map(|list| {
+        let offers: Vec<String> = ps_array(Some(list))
+            .iter()
+            .filter(|o| truthy(o))
+            .map(|o| {
+                format!(
+                    "{{\"item\":[{},{}],\"done\":{},\"price\":{},\"spent\":{},\"state\":\"{}\"}}",
+                    ps_long(prop(o, "id")),
+                    ps_long(prop(o, "total")),
+                    ps_long(prop(o, "done")),
+                    ps_long(prop(o, "price")),
+                    ps_long(prop(o, "spent")),
+                    ps_string(prop(o, "state"))
+                )
+            })
+            .collect();
+        format!("[{}]", offers.join(","))
+    });
     Ok(Some(Containers {
+        ge,
         bank: conv(prop(&c, "bank")),
         equipment: conv(prop(&c, "equipment")),
         inventory: conv(prop(&c, "inventory")),
