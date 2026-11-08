@@ -1116,11 +1116,13 @@ function attributeClog() {
     return [...ids];
   };
 
-  // 1. Items dated after the first saved sync: the session that refresh falls in
-  for (const [id, date] of cl.firstSeen) {
-    if (!date) continue;
-    const s = sessions.find((x) => date <= x.time && date > x.from) ?? sessions.find((x) => x.time >= date);
-    if (s && s.items.length < s.need) give(id, s, true);
+  // 1. Items dated after the first saved sync, oldest first: the first slot gain at or after the item's time that
+  //    still has room. The hiscores can count a slot several updates late (Ancient treatise got at 00:33, counted at
+  //    04:06), so a full window passes the item on instead of dropping it and guessing a source for the later slot.
+  const dated = [...cl.firstSeen].filter(([, date]) => date).sort((a, b) => a[1] - b[1]);
+  for (const [id, date] of dated) {
+    const s = sessions.find((x) => x.time >= date && x.items.length < x.need);
+    if (s) give(id, s, true);
   }
   // 1b. The Loot Tracker (plugin): sources whose every recorded kill falls inside one session. A log item they
   //     dropped at least as many times as the log counts was first obtained then, which covers sources the
