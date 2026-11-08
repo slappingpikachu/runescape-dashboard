@@ -18,7 +18,7 @@ foreach ($f in "items.json", "mapping.json", "derived.json", "slots.json") { Cop
 Copy-Item "$Project\data\progress\diary-tasks.json" "$Work\data\progress\"
 
 $Root = $Work; $DataDir = "$Work\data"; $Utf8 = New-Object System.Text.UTF8Encoding($false)
-. "$Project\icon-outline.ps1"; . "$Project\clog.ps1"; . "$Project\progress.ps1"; . "$Project\bank.ps1"; . "$Project\plugin.ps1"
+. "$Project\icon-outline.ps1"; . "$Project\clog.ps1"; . "$Project\progress.ps1"; . "$Project\bank.ps1"; . "$Project\plugin.ps1"; . "$Project\sync.ps1"
 $RealPlugin = Get-PluginDir   # the real folder (plugin.ps1 rule), read only
 $RealPlayer = $Player
 $PluginRoot = "$Work\plugin-data"

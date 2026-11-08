@@ -26,6 +26,9 @@ pub fn update_progress(ctx: &Ctx) -> Res<String> {
     if !opt_truthy(prop(&p, "quests")) {
         return Ok("Progress: progress.json has no quests yet".into());
     }
+    if crate::sync::is_stale(&ctx.data, "progress", &crate::sync::updated_in(&read_text(&file).unwrap_or_default())) {
+        return Ok("Progress: skipped (older than the data imported from your other device; log in to RuneLite here to update it)".into());
+    }
     let dir = ctx.data.join("progress");
     ensure_dir(&dir);
     let info = read_json(&dir.join("diary-tasks.json"));
@@ -474,6 +477,9 @@ pub fn update_kills(ctx: &Ctx, time: &str) -> Res<String> {
     if k.is_empty() {
         return Ok(format!("Plugin kills: Loot Tracker has nothing yet; {names}"));
     }
+    if crate::sync::is_stale(&ctx.data, "killcounts", &crate::sync::updated_in(&read_text(&file).unwrap_or_default())) {
+        return Ok(format!("Plugin kills: skipped (older than the data imported from your other device); {names}"));
+    }
     let json = ps_json(&Value::Object(k.clone()));
     ensure_dir(&ctx.plugin_data());
     let hist = ctx.plugin_data().join("kills-history.jsonl");
@@ -535,7 +541,8 @@ fn gap_line(lines: &mut Vec<(String, i64)>, ty: &str, name: &str, last: i64, fro
     if at <= from || at > to {
         at = to;
     }
-    let o = json!({"t": iso_ms(at), "source": name, "type": ty, "kills": kills, "gap": true, "items": items});
+    // from / to: the window, so kills logged on another device in it can come off this gap (sync.rs gap_fixed)
+    let o = json!({"t": iso_ms(at), "source": name, "type": ty, "kills": kills, "gap": true, "from": iso_ms(from), "to": iso_ms(to), "items": items});
     lines.push((ps_json(&o), kills));
 }
 

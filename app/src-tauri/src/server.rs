@@ -119,6 +119,17 @@ impl Dashboard {
                     text(status, JSON, body)
                 }
             }
+            (true, "/api/sync") => text(200, JSON, crate::sync::status(&self.data_dir())),
+            (false, "/api/export") => {
+                let _busy = self.work.lock().unwrap_or_else(|e| e.into_inner());
+                let (status, body) = crate::sync::export(&self.data_dir(), &self.settings().0);
+                text(status, JSON, body)
+            }
+            (false, "/api/import") => {
+                let _busy = self.work.lock().unwrap_or_else(|e| e.into_inner());
+                let (status, body) = crate::sync::import(&self.data_dir(), &self.settings().0, req.body());
+                text(status, JSON, body)
+            }
             (false, "/api/wom") => {
                 let _busy = self.work.lock().unwrap_or_else(|e| e.into_inner());
                 let (status, body) = refresh::wom(&self.root, &self.web, &self.settings, req.body());
@@ -306,8 +317,13 @@ impl Dashboard {
                 .collect()
         };
         let plugin_data = self.data_dir().join("plugin");
-        let mut drops = whole(&dir.join("loot.jsonl"));
-        drops.extend(whole(&plugin_data.join("loot-gaps.jsonl")));
+        // With another device's drops imported (sync.rs): both devices' drops and gaps, by time
+        let drops = crate::sync::drops_with_other(
+            &self.data_dir(),
+            whole(&dir.join("loot.jsonl")),
+            whole(&plugin_data.join("loot-gaps.jsonl")),
+            whole,
+        );
         let max = 5000;
         let drops = if drops.len() > max { drops[drops.len() - max..].join(",") } else { drops.join(",") };
         let hist: Vec<String> =

@@ -353,6 +353,27 @@ input[type=search]:focus { border-color: var(--gold); }
 .toast.success { border-color: rgba(74,222,128,.45); }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } }
 
+/* Sync with your other device: a button next to Update and its panel */
+.sync { position: relative; }
+.sync-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; font-weight: 500; }
+.sync-btn[aria-expanded="true"] { color: var(--text); border-color: var(--gold); }
+.sync-panel {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 40;
+  width: min(380px, calc(100vw - 32px)); padding: 18px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface-2); border-color: var(--border-strong);
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,.7);
+  animation: sec-range-in .2s cubic-bezier(.3,.7,.3,1);
+}
+.sync-panel p { margin: 0; font-size: 14.5px; line-height: 1.45; }
+.sync-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.sync-actions .btn-primary, .sync-actions .btn-ghost { flex: 1; justify-content: center; }
+.sync-status:empty { display: none; }
+@media (max-width: 560px) {
+  .sync-btn span { display: none; }
+  .sync-panel { position: fixed; top: calc(var(--topbar-h) + 8px); left: 16px; right: 16px; width: auto; }
+}
+
 @media (max-width: 560px) {
   .segmented button { padding: 7px 10px; font-size: 14.5px; }
   .tile-value { font-size: 26.5px; }

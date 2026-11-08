@@ -21,7 +21,7 @@ function Get-PluginDir {
   $name = ($Player -replace [char]160, ' ').Trim().ToLowerInvariant() -replace '[^a-z0-9_-]+', '_'
   return Join-Path $PluginRoot $name
 }
-function Get-PluginFiles { @("progress.json", "killcounts.json", "clog.json", "containers.json", "loot.jsonl" | ForEach-Object { Join-Path (Get-PluginDir) $_ }) + $KillHistoryFile + $LootGapFile + $NpcIconDir }
+function Get-PluginFiles { @("progress.json", "killcounts.json", "clog.json", "containers.json", "loot.jsonl" | ForEach-Object { Join-Path (Get-PluginDir) $_ }) + $KillHistoryFile + $LootGapFile + $NpcIconDir + $LootOtherFile + $GapsOtherFile }
 
 function Get-PluginJson {
   $dir = Get-PluginDir
@@ -40,22 +40,31 @@ function Get-PluginJson {
 
   # The loot log lines themselves (newest $DropLogMax) go to the page for the Drop log. Only whole
   # lines: one still being written is left for the next request.
-  $drops = New-Object System.Collections.Generic.List[string]
-  $lootFile = Join-Path $dir "loot.jsonl"
-  if (Test-Path $lootFile) {
-    foreach ($line in [IO.File]::ReadAllLines($lootFile, $Utf8)) {
-      $l = $line.Trim()
-      if ($l.StartsWith('{"t":"') -and $l.EndsWith("}")) { $drops.Add($l) }
+  $whole = {
+    param($file)
+    $out = New-Object System.Collections.Generic.List[string]
+    if (Test-Path $file) {
+      foreach ($line in [IO.File]::ReadAllLines($file, $Utf8)) {
+        $l = $line.Trim()
+        if ($l.StartsWith('{"t":"') -and $l.EndsWith("}")) { $out.Add($l) }
+      }
     }
+    return , $out
   }
+  $ownLoot = & $whole (Join-Path $dir "loot.jsonl")
   $DropLogMax = 5000   # ~120 bytes each: the page never gets more than ~0.6 MB of drop log
   # Kills done without the plugin (Update-PluginLootGaps): "gap": true lines, same shape plus "kills"
-  if (Test-Path $LootGapFile) {
-    foreach ($line in [IO.File]::ReadAllLines($LootGapFile, $Utf8)) {
-      $l = $line.Trim()
-      if ($l.StartsWith('{"t":"') -and $l.EndsWith("}")) { $drops.Add($l) }
-    }
-  }
+  $ownGaps = & $whole $LootGapFile
+  $drops = New-Object System.Collections.Generic.List[string]
+  if ((Test-Path $LootOtherFile) -or (Test-Path $GapsOtherFile)) {
+    # Imported from another device (sync.ps1): its drops, and each device's gaps less the drops the other one
+    # logged in that gap's window; all by time, so the newest $DropLogMax are the newest of both devices
+    $otherLoot = & $whole $LootOtherFile
+    $all = New-Object System.Collections.Generic.List[string]
+    $all.AddRange($ownLoot); $all.AddRange($otherLoot)
+    $all.AddRange((Get-SyncGapFixed $ownGaps $otherLoot)); $all.AddRange((Get-SyncGapFixed (& $whole $GapsOtherFile) $ownLoot))
+    $drops = Sort-SyncLines $all $SyncByT
+  } else { $drops.AddRange($ownLoot); $drops.AddRange($ownGaps) }
   $dropsJson = if ($drops.Count -gt $DropLogMax) { $drops.GetRange($drops.Count - $DropLogMax, $DropLogMax) -join "," } else { $drops -join "," }
 
   $hist = if (Test-Path $KillHistoryFile) { ([IO.File]::ReadAllLines($KillHistoryFile, $Utf8) | Where-Object { $_.Trim() }) -join "," } else { "" }
@@ -72,6 +81,7 @@ function Update-PluginProgress {
   if (-not (Test-Path $file)) { return "Progress: no progress.json yet (log in with OSRS Data Sync on)" }
   $p = [IO.File]::ReadAllText($file, $Utf8) | ConvertFrom-Json
   if (-not $p.quests) { return "Progress: progress.json has no quests yet" }
+  if (Test-SyncStale "progress" ([IO.File]::ReadAllText($file, $Utf8) -replace '(?s)^.*?"updated":"([^"]*)".*$', '$1')) { return "Progress: skipped (older than the data imported from your other device; log in to RuneLite here to update it)" }
   $dirW = Join-Path $DataDir "progress"
   if (-not (Test-Path $dirW)) { New-Item -ItemType Directory $dirW | Out-Null }
   $taskFile = Join-Path $dirW "diary-tasks.json"
@@ -370,6 +380,7 @@ function Update-PluginKills([string]$time) {
   if ($npcNames.Count) { $names += "; " + $(try { Update-NpcIcons $npcNames } catch { "monster pictures failed: $($_.Exception.Message)" }) }
 
   if (-not $k.Count) { return "Plugin kills: Loot Tracker has nothing yet; $names" }
+  if (Test-SyncStale "killcounts" ([IO.File]::ReadAllText($file, $Utf8) -replace '(?s)^.*?"updated":"([^"]*)".*$', '$1')) { return "Plugin kills: skipped (older than the data imported from your other device); $names" }
   $json = $k | ConvertTo-Json -Compress
   if (-not (Test-Path $PluginDataDir)) { New-Item -ItemType Directory $PluginDataDir | Out-Null }
   if (Test-Path $KillHistoryFile) {
@@ -441,7 +452,9 @@ function Update-PluginLootGaps {
     # Dated at the source's last kill when that falls in the window, else at the window's end
     $at = if ($c.last -gt 0) { [DateTimeOffset]::FromUnixTimeMilliseconds($c.last).UtcDateTime } else { $to }
     if ($at -le $from -or $at -gt $to) { $at = $to }
-    $o = [ordered]@{ t = $at.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"); source = $c.name; type = $c.type; kills = $kills; gap = $true; items = $items }
+    # from / to: the window, so kills logged on another device in it can come off this gap (sync.ps1 Get-SyncGapFixed)
+    $o = [ordered]@{ t = $at.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"); source = $c.name; type = $c.type; kills = $kills; gap = $true
+      from = $from.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"); to = $to.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"); items = $items }
     $lines.Add(($o | ConvertTo-Json -Compress -Depth 4))
   }
 

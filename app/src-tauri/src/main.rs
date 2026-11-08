@@ -14,6 +14,7 @@ mod net;
 mod plugin;
 mod refresh;
 mod server;
+mod sync;
 mod util;
 mod wom;
 

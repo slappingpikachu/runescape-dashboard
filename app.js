@@ -4156,4 +4156,66 @@ async function answerWom(doImport) {
 }
 $("wom-import").addEventListener("click", () => answerWom(true));
 $("wom-skip").addEventListener("click", () => answerWom(false));
+
+// ---- Sync with your other device (server sync.ps1 / sync.rs) ----
+// Export saves one file to Downloads; Import merges such a file made on the other device (every snapshot of both is
+// kept; nothing is overwritten), then the page reloads its data. Only with a server: the phone snapshot and a page
+// opened as a file have no Sync button.
+function setupSync() {
+  const box = $("sync"), panel = $("sync-panel"), btn = $("sync-btn"), file = $("sync-file");
+  if (!box) return;
+  if (window.SNAPSHOT || location.protocol === "file:") { box.remove(); return; }
+  const when = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  const loadStatus = async () => {
+    const s = await fetch("/api/sync", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const parts = s ? [`This device: ${s.device}`] : [];
+    if (s?.exported) parts.push(`Last export: ${when(s.exported)}`);
+    if (s?.imported) parts.push(`Last import: from ${s.imported.name}, exported ${when(s.imported.exported)}`);
+    $("sync-status").textContent = parts.join(" · ");
+  };
+  const open = (show) => {
+    panel.hidden = !show;
+    btn.setAttribute("aria-expanded", String(show));
+    if (show) loadStatus();
+  };
+  btn.addEventListener("click", () => open(panel.hidden));
+  document.addEventListener("click", (e) => { if (!panel.hidden && !box.contains(e.target)) open(false); });
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !panel.hidden) { e.stopPropagation(); open(false); btn.focus(); }
+  }, true);
+  // One request at a time: both buttons wait while it runs
+  const run = async (el, busy, request) => {
+    const label = el.querySelector("span"), idle = label.textContent;
+    $("sync-export").disabled = $("sync-import").disabled = true;
+    el.classList.add("loading"); label.textContent = busy;
+    try {
+      const res = await request();
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `Failed (${res.status})`);
+      return body;
+    } catch (e) {
+      toast(e.message, "error");
+      return null;
+    } finally {
+      $("sync-export").disabled = $("sync-import").disabled = false;
+      el.classList.remove("loading"); label.textContent = idle;
+      loadStatus();
+    }
+  };
+  $("sync-export").addEventListener("click", async () => {
+    const body = await run($("sync-export"), "Exporting…", () => fetch("/api/export", { method: "POST", body: "{}" }));
+    if (body) toast(body.message, "success");
+  });
+  $("sync-import").addEventListener("click", () => file.click());
+  file.addEventListener("change", async () => {
+    const f = file.files?.[0];
+    file.value = ""; // the same file can be picked again
+    if (!f) return;
+    const body = await run($("sync-import"), "Importing…", async () => fetch("/api/import", { method: "POST", body: await f.text() }));
+    if (!body) return;
+    await loadHistory().catch((e) => toast(e.message, "error"));
+    toast(body.message, "success");
+  });
+}
+setupSync();
 document.fonts?.ready.then(moveIndicator);

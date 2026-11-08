@@ -27,6 +27,7 @@ These links always point to the latest version. Release notes and earlier versio
 - **Quests, diaries and combat achievements**: completion status, requirements, and task lists with each completed
   diary task marked.
 - **Recent activity**: a feed of every update, a 16-week heatmap and streaks.
+- **Sync**: export your history on one computer and import it on another; both keep every snapshot.
 
 Every view can be set to any period from one day to all time. Charts and periods follow the game's daily reset
 (00:00 UTC); the activity feed and drop log are grouped by your calendar day.
@@ -91,6 +92,28 @@ Each update adds a snapshot to `data\history.jsonl`. Snapshots from the last 14 
 snapshots are combined into one per game day, which keeps daily gains intact. Update at least once a day for
 accurate daily figures.
 
+## Using two computers
+
+If you play on more than one computer (for example a Windows PC and a Mac), select **Sync** next to **Update** to
+keep both dashboards' history the same:
+
+1. On the computer you just played on, select **Export**. A `.osrssync` file is saved to your Downloads folder.
+2. Move the file to the other computer (AirDrop, USB stick, or email it to yourself).
+3. On the other computer, select **Sync**, then **Import File…**, and pick the file.
+
+Import merges; it never replaces. Every snapshot from both computers is kept and sorted by time: hiscores, bank,
+quests, diaries, combat achievements, collection log, kill totals and the drop log. Settings, prices and images stay
+per computer. Nothing is uploaded; the file only goes where you move it. The files as they were before an import are
+kept in `data\sync\backup-<time>\` (the newest three).
+
+- Both computers must be set up for the same OSRS name. Log in to the same RuneLite account on both, so RuneLite's
+  Loot Tracker totals are shared.
+- Kills you make on one computer appear on the other only after an import. Until then, the other computer may list
+  them as played without the plugin; the import removes those entries again.
+- After an import, an **Update** skips this computer's RuneLite files when they are older than what the other
+  computer sent (RuneLite hasn't run here since), so older quests or an older bank never replace newer ones. Once
+  RuneLite runs on this computer again, its files count as usual.
+
 ## Phone access
 
 To open the dashboard from a phone on the same network, run `enable-phone-access.bat` once as administrator. The
@@ -106,7 +129,8 @@ access.
 | `data\bank\` | Bank history, item names and prices |
 | `data\clog\` | Collection log history, item data, prices and layout |
 | `data\progress\` | Quest, diary and combat achievement history and task lists |
-| `data\plugin\` | Kill totals per update and monster images |
+| `data\plugin\` | Kill totals per update, drop log gaps, drops imported from your other computer, monster images |
+| `data\sync\` | This computer's sync state and backups from before each import |
 | `icons\` | Item, boss and monster images from the OSRS Wiki |
 
 Back up the `data` folder to keep your history. Use a separate copy of the dashboard for each account.
@@ -133,7 +157,7 @@ These rebuild reference data from the OSRS Wiki when new content is released. Ru
 | Path | Contents |
 | --- | --- |
 | `server.ps1` | Local web server and update pipeline |
-| `plugin.ps1`, `bank.ps1`, `clog.ps1`, `progress.ps1`, `wom.ps1`, `icon-outline.ps1` | Data processing |
+| `plugin.ps1`, `bank.ps1`, `clog.ps1`, `progress.ps1`, `wom.ps1`, `sync.ps1`, `icon-outline.ps1` | Data processing |
 | `index.html`, `styles.css`, `app.js`, `vendor\` | Web interface |
 | `app\` | Desktop app (Tauri and Rust) |
 | `tools\` | Maintenance, release and test scripts |

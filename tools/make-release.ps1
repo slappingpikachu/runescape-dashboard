@@ -13,7 +13,7 @@ $Zip     = Join-Path $Dist "osrs-dashboard.zip"
 # The program
 $files = @(
   "start.bat", "enable-phone-access.bat", "README.md",
-  "server.ps1", "plugin.ps1", "bank.ps1", "clog.ps1", "progress.ps1", "icon-outline.ps1", "wom.ps1",
+  "server.ps1", "plugin.ps1", "bank.ps1", "clog.ps1", "progress.ps1", "icon-outline.ps1", "wom.ps1", "sync.ps1",
   "index.html", "styles.css", "app.js",
   # Tools someone may need (re-fetch reference lists from the wiki, phone access, import old Wise Old Man history).
   # Not shipped: fetch-vendor.ps1 + fetch-item-mapping.ps1 (one-time, other hosts; their results ship instead)

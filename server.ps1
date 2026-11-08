@@ -107,6 +107,7 @@ function Send-Cached($ctx, [string]$type, $c) {
 . (Join-Path $Root "bank.ps1")   # bank value, prices, changes (contents: plugin.ps1 Get-PluginContainers)
 . (Join-Path $Root "plugin.ps1")   # JSON export files from RuneLite ("OSRS Data Sync" format)
 . (Join-Path $Root "wom.ps1")      # optional one-time import of older history from Wise Old Man (POST /api/wom)
+. (Join-Path $Root "sync.ps1")     # Export / Import between your own devices (POST /api/export, /api/import)
 
 function Read-Body($ctx) {
   $reader = New-Object IO.StreamReader($ctx.Request.InputStream, $Utf8)
@@ -342,6 +343,16 @@ try {
             Send $ctx 422 "application/json" "{""error"":$(ConvertTo-JsonString $msg)}"
           }
         }
+      } elseif ($path -eq "/api/sync" -and $ctx.Request.HttpMethod -eq "GET") {
+        Send $ctx 200 "application/json" (Get-SyncStatusJson)
+      } elseif ($path -eq "/api/export" -and $ctx.Request.HttpMethod -eq "POST") {
+        # One file in Downloads with this device's history, for Import on your other device (sync.ps1)
+        $r = Export-Sync
+        Send $ctx $r[0] "application/json" $r[1]
+      } elseif ($path -eq "/api/import" -and $ctx.Request.HttpMethod -eq "POST") {
+        # Body: a file made by Export on another device; merged into this device's data (sync.ps1)
+        $r = try { Import-Sync (Read-Body $ctx) } catch { Write-Host "Import failed: $($_.Exception.Message)"; @(500, "{""error"":$(ConvertTo-JsonString "Import failed: $($_.Exception.Message)")}") }
+        Send $ctx $r[0] "application/json" $r[1]
       } elseif ($path -eq "/api/plugin" -and $ctx.Request.HttpMethod -eq "GET") {
         Send-Cached $ctx "application/json" (Get-Cached "plugin" @(Get-PluginFiles) { Get-PluginJson })
       } elseif ($path -eq "/api/progress" -and $ctx.Request.HttpMethod -eq "GET") {

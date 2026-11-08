@@ -110,8 +110,13 @@ pub fn update(ctx: &Ctx) -> Res<String> {
     let Some(plug) = crate::plugin::containers(ctx)? else {
         return Ok("Bank: nothing from OSRS Data Sync yet (log in with the plugin on and open your bank once)".into());
     };
-    let items = from_item_list(&plug.bank);
-    let saved = if plug.bank_at != 0 {
+    // Older than what another device sent (sync.rs): RuneLite hasn't run here since, so nothing here is newer
+    let plug_updated = crate::sync::updated_in(&read_text(&ctx.plugin_dir.join("containers.json")).unwrap_or_default());
+    if crate::sync::is_stale(&ctx.data, "containers", &plug_updated) {
+        return Ok("Bank: skipped (older than the data imported from your other device; log in to RuneLite here to update it)".into());
+    }
+    let mut items = from_item_list(&plug.bank);
+    let mut saved = if plug.bank_at != 0 {
         Local.timestamp_millis_opt(plug.bank_at).single().map(|t| t.format("%H:%M:%S, %-d %b %Y").to_string()).unwrap_or_default()
     } else {
         format!("before {}", local_stamp(plug.updated))
@@ -119,6 +124,15 @@ pub fn update(ctx: &Ctx) -> Res<String> {
     let worn = from_item_list(&plug.equipment);
     let carried = from_item_list(&plug.inventory);
     let pouch = plug.rune_pouch.as_ref().map(from_item_list);
+    // The bank was last seen open on another device, later than here (sync.rs): keep that bank (the last line has
+    // it), with what is worn and carried as of now
+    let seen_bank_at = crate::sync::seen_bank_at(&ctx.data);
+    if let Some(p) = &prev {
+        if seen_bank_at > 0 && plug.bank_at < seen_bank_at {
+            items = ps_array(prop(p, "items")).iter().filter(|x| truthy(x)).map(|x| (ps_long(x.get(0)), ps_long(x.get(1)))).collect();
+            saved = ps_string(prop(p, "saved"));
+        }
+    }
 
     // Offers are part of what's owned (the page counts them), so a change is a new line. No offers = same as a line without "ge"
     let no_empty = |s: &str| if s == "[]" { String::new() } else { s.to_string() };

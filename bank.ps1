@@ -68,6 +68,9 @@ function Update-Bank {
   # the plugin already counts noted items as the item)
   $plug = Get-PluginContainers
   if (-not $plug) { return "Bank: nothing from OSRS Data Sync yet (log in with the plugin on and open your bank once)" }
+  # Older than what another device sent (sync.ps1): RuneLite hasn't run here since, so nothing here is newer
+  $plugUpdated = [IO.File]::ReadAllText((Join-Path (Get-PluginDir) "containers.json"), $Utf8) -replace '(?s)^.*?"updated":"([^"]*)".*$', '$1'
+  if (Test-SyncStale "containers" $plugUpdated) { return "Bank: skipped (older than the data imported from your other device; log in to RuneLite here to update it)" }
   $src = "plugin"
   $items = ConvertFrom-ItemList $plug.bank
   $saved = if ($plug.bankAt) { [DateTimeOffset]::FromUnixTimeMilliseconds($plug.bankAt).LocalDateTime.ToString("HH:mm:ss, d MMM yyyy") } else { "before " + $plug.updated.ToLocalTime().ToString("HH:mm:ss, d MMM yyyy") }
@@ -75,6 +78,13 @@ function Update-Bank {
   $worn = ConvertFrom-ItemList $plug.equipment
   $carried = ConvertFrom-ItemList $plug.inventory
   $pouch = if ($null -ne $plug.runePouch) { ConvertFrom-ItemList $plug.runePouch } else { $null }
+  # The bank was last seen open on another device, later than here (sync.ps1): keep that bank (the last line has it),
+  # with what is worn and carried as of now
+  $seenBankAt = Get-SyncSeenBankAt
+  if ($prev -and $seenBankAt -gt 0 -and [long]$plug.bankAt -lt $seenBankAt) {
+    $items = @(foreach ($p in @($prev.items)) { if ($p) { , @([int]$p[0], [long]$p[1]) } })
+    $saved = [string]$prev.saved
+  }
 
   # Written by hand: PS 5.1's ConvertTo-Json turns arrays that went through a pipeline into {"value":..,"Count":..}
   $toJson = { param($list) "[" + ((@(foreach ($p in @($list)) { if ($p) { "[$([long]$p[0]),$([long]$p[1])]" } })) -join ",") + "]" }

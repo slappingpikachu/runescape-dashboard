@@ -1,5 +1,5 @@
 // Command-line use without a window, for the tests in tools\ (parity-test.ps1, test-plugin-files.ps1 -Impl app):
-//   --root <folder> --cli GET|POST <path> [body] [--out <file>]   one request; answer to stdout (or the file)
+//   --root <folder> --cli GET|POST <path> [body|@file] [--out <file>]   one request; answer to stdout (or the file)
 //   --root <folder> --step progress|lootgaps|clog|bank|kills [time]  one Refresh step; its message to stdout
 //   --plugin-dir <player>                                          the plugin folder used for that player
 //   --same <file A> <file B>                                       0 = same data (JSON / JSONL compared as data)
@@ -36,7 +36,12 @@ pub fn run(args: &[String], layout: &Layout) -> Option<i32> {
         let dash = Dashboard::new(layout);
         let method = arg(args, "--cli", 1).unwrap_or_else(|| "GET".into());
         let path = arg(args, "--cli", 2).unwrap_or_else(|| "/".into());
-        let body = arg(args, "--cli", 3).filter(|b| b != "--out").unwrap_or_default().into_bytes();
+        // A body starting with @ is read from that file (an export file for POST /api/import)
+        let body = arg(args, "--cli", 3).filter(|b| b != "--out").unwrap_or_default();
+        let body = match body.strip_prefix('@') {
+            Some(f) => std::fs::read(f).unwrap_or_default(),
+            None => body.into_bytes(),
+        };
         let req = tauri::http::Request::builder()
             .method(method.as_str())
             .uri(format!("http://dash.localhost{path}"))
