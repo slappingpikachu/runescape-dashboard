@@ -11,6 +11,7 @@ history locally.
 | Package | Platform | Link |
 | --- | --- | --- |
 | Desktop app installer | Windows 10/11 | [OSRS-Dashboard-Setup.exe](https://github.com/slappingpikachu/runescape-dashboard/releases/latest/download/OSRS-Dashboard-Setup.exe) |
+| Desktop app disk image | macOS 11 or later, Apple silicon (M1 and newer) | [OSRS-Dashboard-Mac.dmg](https://github.com/slappingpikachu/runescape-dashboard/releases/latest/download/OSRS-Dashboard-Mac.dmg) |
 | Dashboard (PowerShell) | Windows, macOS | [osrs-dashboard.zip](https://github.com/slappingpikachu/runescape-dashboard/releases/latest/download/osrs-dashboard.zip) |
 
 These links always point to the latest version. Release notes and earlier versions are on the
@@ -34,7 +35,8 @@ Every view can be set to any period from one day to all time. Charts and periods
 
 ## Requirements
 
-- Windows 10 or 11. On macOS, PowerShell 7 (`brew install powershell`).
+- Windows 10 or 11, or macOS 11 or later. The desktop app for Mac needs Apple silicon (M1 and newer); the
+  PowerShell version on a Mac needs PowerShell 7 (`brew install powershell`).
 - For bank, collection log, quests, diaries, combat achievements, kills and loot: RuneLite exporting JSON files to
   `.runelite/plugin-data/osrsdatasync/<player>/`. This is the format of the OSRS Data Sync plugin on RuneLite's
   Plugin Hub. Keep RuneLite's built-in **Loot Tracker** plugin enabled for kills and loot. Without these files, the
@@ -52,16 +54,24 @@ Every view can be set to any period from one day to all time. Charts and periods
 
 Run `pwsh server.ps1` in the dashboard folder, then open http://localhost:8765/.
 
-### Desktop app (Windows)
+### Desktop app (Windows and Mac)
 
-The same dashboard is available as a standalone Windows app that needs no console window or browser. Run
-[OSRS-Dashboard-Setup.exe](#download); it installs without administrator rights.
+The same dashboard is available as a standalone app that needs no console window or browser.
 
-- The app is not code-signed. On first launch, Windows SmartScreen shows a warning: select **More info**, then
-  **Run anyway**.
-- Data is stored in `%APPDATA%\OSRS Dashboard`. To use an existing dashboard folder instead, create a file named
-  `root.txt` there containing that folder's path.
-- Do not run the app and `start.bat` on the same folder at the same time.
+- **Windows:** run [OSRS-Dashboard-Setup.exe](#download); it installs without administrator rights. The app is not
+  code-signed, so on first launch Windows SmartScreen shows a warning: select **More info**, then **Run anyway**.
+- **Mac:** open [OSRS-Dashboard-Mac.dmg](#download) and drag **OSRS Dashboard** into **Applications**. The app is not
+  code-signed, so the first time, right-click it in Applications, select **Open**, then **Open** again.
+
+| | Windows | Mac |
+| --- | --- | --- |
+| Data | `%APPDATA%\OSRS Dashboard\` | `~/Library/Application Support/OSRS Dashboard/` |
+
+- To use an existing dashboard folder instead, create a file named `root.txt` in the data folder containing that
+  folder's path.
+- Do not run the app and the PowerShell version (`start.bat` or `pwsh server.ps1`) on the same folder at the same
+  time.
+- To move your history to a second computer, or keep two computers the same, use [Sync](#using-two-computers).
 
 Build instructions for Windows and macOS are in [app/README.md](app/README.md).
 

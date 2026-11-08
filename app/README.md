@@ -37,8 +37,19 @@ From `app/src-tauri`:
 
 ```
 cargo tauri build --bundles nsis       # Windows installer: target/release/bundle/nsis/
-cargo tauri build --bundles app,dmg    # macOS app and disk image: target/release/bundle/dmg/
+cargo tauri build --bundles app        # macOS app: target/release/bundle/macos/OSRS Dashboard.app
 ```
+
+Tauri's own disk image step (`--bundles dmg`) can fail with `hdiutil: couldn't unmount "diskN" - Resource busy`,
+because its script has Finder style the window while Finder keeps the image open. Make the disk image with `hdiutil`
+instead. From `app/src-tauri/target/release/bundle`:
+
+```
+mkdir dmg-src && cp -R "macos/OSRS Dashboard.app" dmg-src/ && ln -s /Applications dmg-src/Applications
+hdiutil create -volname "OSRS Dashboard" -srcfolder dmg-src -fs HFS+ -format UDZO -ov OSRS-Dashboard-Mac.dmg
+```
+
+The macOS build runs on Apple silicon only (M1 and newer).
 
 Before compiling, `build.rs` copies the page, fonts, chart library, images and reference lists into
 `app/bundle/dashboard/` using the same allow-list as `tools/make-release.ps1`. The build fails if it finds personal
