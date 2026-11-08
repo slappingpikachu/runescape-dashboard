@@ -186,6 +186,34 @@ pub fn update_clog(ctx: &Ctx) -> Res<String> {
             plugin.insert(id, q);
         }
     }
+    // New items from the game's "New item added to your collection log" message (newByName): name -> log id via
+    // the saved names (a name shared by several log ids is skipped), at least 1, dated at the message
+    let mut new_date: IndexMap<String, String> = IndexMap::new();
+    let new_by_name = props(prop(&c, "newByName"));
+    if !new_by_name.is_empty() {
+        let name_map = read_json(&dir.join("items.json")).and_then(|v| prop(&v, "items").cloned()).unwrap_or(Value::Null);
+        let mut by_name: IndexMap<String, String> = IndexMap::new();
+        for id in &log_set {
+            let n = ps_array(prop(&name_map, id)).into_iter().next().map(|v| ps_string(Some(&v))).unwrap_or_default();
+            if n.is_empty() {
+                continue;
+            }
+            let k = n.to_lowercase();
+            let v = match by_name.get(&k) {
+                Some(x) if x != id => String::new(),
+                _ => id.clone(),
+            };
+            by_name.insert(k, v);
+        }
+        for (name, t) in new_by_name {
+            let Some(id) = by_name.get(&name.to_lowercase()).filter(|x| !x.is_empty()).cloned() else { continue };
+            let e = plugin.entry(id.clone()).or_insert(0);
+            if *e < 1 {
+                *e = 1;
+            }
+            new_date.insert(id, parse_time_or_err(&ps_string(Some(&t))).map(stamp).unwrap_or_else(|_| now_s.clone()));
+        }
+    }
     let mut ids: IndexSet<String> = plugin.keys().cloned().collect();
     ids.extend(drop_add.keys().cloned());
     let mut changes = 0;
@@ -200,7 +228,7 @@ pub fn update_clog(ctx: &Ctx) -> Res<String> {
         }
         let date = match items.get(id) {
             Some(x) => x.1.clone(),
-            None => drop_date.get(id).cloned().unwrap_or_else(|| now_s.clone()),
+            None => new_date.get(id).or_else(|| drop_date.get(id)).cloned().unwrap_or_else(|| now_s.clone()),
         };
         items.insert(id.clone(), (q, date));
         changes += 1;

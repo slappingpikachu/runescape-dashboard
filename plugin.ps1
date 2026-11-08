@@ -180,6 +180,27 @@ function Update-PluginClog {
   # plugin already counted itself is never added twice.
   $plugin = @{}
   foreach ($it in $c.items.PSObject.Properties) { if ([int]$it.Value -gt 0) { $plugin[$it.Name] = [int]$it.Value } }
+  # New items from the game's "New item added to your collection log" message (newByName): the plugin only fills
+  # "items" when the log is opened, so a new item that wasn't a loot.jsonl drop (e.g. from a skilling action) was
+  # missing and its hiscores slot got a guessed source. Name -> log id via the saved names; a name shared by
+  # several log ids is skipped. Counts as at least 1, dated at the message.
+  $newDate = @{}
+  if ($c.newByName) {
+    $namesRaw = Read-ClogFile "items.json"
+    $nameMap = if ($namesRaw) { ConvertTo-Hash ($namesRaw | ConvertFrom-Json).items } else { @{} }
+    $byName = @{}
+    foreach ($id in $logSet) {
+      $n = $nameMap[$id]; if (-not $n) { continue }
+      $k = ([string]@($n)[0]).ToLowerInvariant()
+      $byName[$k] = if ($byName.ContainsKey($k) -and $byName[$k] -ne $id) { "" } else { $id }
+    }
+    foreach ($p in $c.newByName.PSObject.Properties) {
+      $id = $byName[$p.Name.ToLowerInvariant()]
+      if (-not $id) { continue }
+      if ([int]$plugin[$id] -lt 1) { $plugin[$id] = 1 }
+      $newDate[$id] = try { [DateTime]::Parse([string]$p.Value).ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss") } catch { $now }
+    }
+  }
   $changes = 0
   $ids = New-Object 'System.Collections.Generic.HashSet[string]'   # Select-Object -Unique is O(n^2) in PS 5.1
   foreach ($id in @($plugin.Keys) + @($dropAdd.Keys)) { [void]$ids.Add($id) }
@@ -191,7 +212,7 @@ function Update-PluginClog {
     $q = [Math]::Max([int]$plugin[$id], $base + [int]$dropAdd[$id])
     if ($q -le $had) { continue }
     if ($items.Contains($id)) { $items[$id] = @($q, $items[$id][1]) }
-    else { $items[$id] = @($q, $(if ($dropDate[$id]) { $dropDate[$id] } else { $now })) }
+    else { $items[$id] = @($q, $(if ($newDate[$id]) { $newDate[$id] } elseif ($dropDate[$id]) { $dropDate[$id] } else { $now })) }
     $changes++
   }
   $available = [Math]::Max([int]$logIds.Count, [int]$prev.available)
