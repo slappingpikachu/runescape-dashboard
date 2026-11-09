@@ -1346,11 +1346,12 @@ button.dt.rd-ok::after { content: ""; position: absolute; top: 4px; right: 4px; 
    them out of the column's size. Without this, 19 "probably carried" items in one row squeezed the bank
    value column beside it to a few px. */
 .bank-out > .kit-pouch, .bank-out > p, .bank-out > .store-tabs { width: 0; min-width: 100%; }
-/* Storage tabs: the Recent Activity tab look (icon tabs, the active one opens to show its name, gold underline),
-   wrapping onto more rows when there are many */
-.store-tabs { flex-wrap: wrap; justify-content: flex-start; }
-.store-tabs button.active { flex: 0 0 auto; padding: 0 10px; }
-.store-tabs button.active span { max-width: 200px; }
+/* Storage tabs: icon tabs spread evenly over the full width (more rows of even columns when there are many). The
+   active one is marked by the gold underline only; its name is in the panel heading, so nothing wraps or leaves a gap */
+.store-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(34px, 1fr)); }
+.store-tabs button, .store-tabs button.active { width: 100%; }
+.store-tabs button.active span { display: none; }
+.store-empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
 /* Keeps the column as wide as the equipment + inventory boxes while another tab is shown */
 .kit-sizer { height: 0; overflow: hidden; visibility: hidden; margin-bottom: -8px; }
 .kit-pouch.store-panel { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 8px; }

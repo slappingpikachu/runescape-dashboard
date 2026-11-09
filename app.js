@@ -2207,7 +2207,8 @@ function bankKitHtml(worn, carried) {
 }
 
 // Storage tabs beside "Equipped & Inventory", in this order: [key in the plugin's "storage", name, icon item].
-// Keys the page doesn't know yet go last, named by the plugin. Only stores with something in them get a tab.
+// Keys the page doesn't know yet go last, named by the plugin. A store gets a tab once any save had something in
+// it, and keeps it when emptied (user 2026-11-09: "I don't want the tabs to go away").
 const STORE_TABS = [
   ["runePouch", "Rune pouch", 12791], ["boltPouch", "Bolt pouch", 9433], ["quiver", "Dizana's quiver", 28947],
   ["essencePouches", "Essence pouches", 26784], ["lootingBag", "Looting bag", 11941], ["herbSack", "Herb sack", 13226],
@@ -2222,12 +2223,13 @@ const KIT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5a4 4
 // [key, name, icon, items, store info from gear.json] for each tab of the current save
 function bankStoreTabs() {
   const b = state.bank, cur = b.cur, tabs = [["kit", "Equipped & Inventory", null, [...cur.worn, ...cur.carried, ...cur.guess], null]];
-  if (cur.pouch.length) tabs.push(["runePouch", "Rune pouch", itemIcon(12791), cur.pouch, { how: "live" }]);
+  const ever = new Set(b.lines.flatMap((l) => Object.keys(l.storedBy).filter((k) => l.storedBy[k].some(([, q]) => q > 0))));
+  if (b.lines.some((l) => l.pouch.length)) tabs.push(["runePouch", "Rune pouch", itemIcon(12791), cur.pouch, { how: "live" }]);
   const known = new Set(STORE_TABS.map(([k]) => k));
-  const keys = [...STORE_TABS.map(([k]) => k), ...Object.keys(cur.storedBy).filter((k) => !known.has(k))];
+  const keys = [...STORE_TABS.map(([k]) => k), ...[...ever].filter((k) => !known.has(k))];
   for (const key of keys) {
     const items = (cur.storedBy[key] ?? []).filter(([, q]) => q > 0);
-    if (!items.length || key === "runePouch") continue;
+    if (!ever.has(key) || key === "runePouch") continue;
     const meta = STORE_TABS.find(([k]) => k === key);
     const ico = meta?.[2] ? itemIcon(meta[2]) : key === "costumeRoom" ? skillIcon("Construction") : null;
     tabs.push([key, b.stores[key]?.name || meta?.[1] || key, ico, items, b.stores[key] ?? null]);
@@ -2259,8 +2261,8 @@ function bankOutHtml() {
     const note = key === "runePouch" && !b.cur.carried.some(([id]) => /rune pouch/i.test(bankName(id))) ? "Always up to date · the pouch is in the bank" : storeNote(info);
     // The equipment + inventory boxes stay in place (invisible, no height) so the column keeps its width on every tab
     body = `<div class="kit-sizer" aria-hidden="true">${bankKitHtml(b.cur.worn, b.cur.carried)}</div>
-      <div class="kit-pouch store-panel"><div class="store-panel-head"><span>${esc(name)}</span><b>${compact(worth(items))} GP</b></div>
-      ${note ? `<span class="muted small">${esc(note)}</span>` : ""}<div class="bank-out-items">${items.map((it) => bankTile(it)).join("")}</div></div>`;
+      <div class="kit-pouch store-panel"><div class="store-panel-head"><span>${esc(titled(name))}</span><b>${compact(worth(items))} GP</b></div>
+      ${note ? `<span class="muted small">${esc(note)}</span>` : ""}${items.length ? `<div class="bank-out-items">${items.map((it) => bankTile(it)).join("")}</div>` : `<span class="store-empty">Empty</span>`}</div>`;
   }
   const all = [...b.cur.worn, ...b.cur.carried, ...b.cur.guess, ...b.cur.pouch, ...b.cur.stored];
   return `<div class="bank-out-head"><h4>${tabs.length > 1 ? "Inventory &amp; Storage" : "Equipped &amp; Inventory"}</h4>${all.length ? `<b title="Everything outside the bank">${compact(b.nowOut)} GP</b>` : ""}</div>
