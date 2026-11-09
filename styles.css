@@ -1351,11 +1351,17 @@ button.dt.rd-ok::after { content: ""; position: absolute; top: 4px; right: 4px; 
 .store-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(34px, 1fr)); }
 .store-tabs button, .store-tabs button.active { width: 100%; }
 .store-tabs button.active span { display: none; }
+/* The selected tab stands out: gold tint + outline + underline, its icon a little bigger with a soft gold glow */
+.store-tabs button.active { background: var(--gold-soft); border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(232, 182, 76, .55), inset 0 -3px 0 var(--gold); }
+.store-tabs button.active img { transform: scale(1.18); filter: drop-shadow(0 0 4px rgba(246, 210, 122, .55)); }
+.store-tabs button.active svg { color: var(--gold-2); }
 .store-empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
 /* Keeps the column as wide as the equipment + inventory boxes while another tab is shown */
 .kit-sizer { height: 0; overflow: hidden; visibility: hidden; margin-bottom: -8px; }
 .kit-pouch.store-panel { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 8px; }
-.store-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-weight: 700; }
+.store-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 700; }
+.store-name { display: inline-flex; align-items: center; gap: 8px; font-size: 16.5px; color: var(--gold-2); }
+.store-name img { width: 26px; height: 26px; object-fit: contain; }
 .store-panel-head b { color: var(--green); font-variant-numeric: tabular-nums; }
 .bank-out-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .bank-out-head h4 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); font-weight: 600; }

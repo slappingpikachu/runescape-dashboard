@@ -2248,7 +2248,7 @@ function storeNote(info) {
 function bankOutHtml() {
   const b = state.bank, tabs = bankStoreTabs();
   const sel = tabs.find(([k]) => k === state.storeTab) ?? tabs[0];
-  const [key, name, , items, info] = sel;
+  const [key, name, icon, items, info] = sel;
   const worth = (list) => list.reduce((s, [id, q]) => s + q * (b.live ? bankValue(id, b.live.prices).gp : bankPrice(id)), 0);
   const tabRow = tabs.length > 1 ? `<div class="pill-toggle feed-filter store-tabs" id="store-tabs" role="tablist" aria-label="Inventory and storage">${tabs.map(([k, n, ico]) =>
     `<button type="button" role="tab" data-store-tab="${esc(k)}" class="${k === key ? "active" : ""}" aria-selected="${k === key}" title="${esc(n)}" aria-label="${esc(n)}">${ico ? `<img src="${ico}" alt="">` : KIT_SVG}<span>${esc(n)}</span></button>`).join("")}</div>` : "";
@@ -2261,7 +2261,7 @@ function bankOutHtml() {
     const note = key === "runePouch" && !b.cur.carried.some(([id]) => /rune pouch/i.test(bankName(id))) ? "Always up to date · the pouch is in the bank" : storeNote(info);
     // The equipment + inventory boxes stay in place (invisible, no height) so the column keeps its width on every tab
     body = `<div class="kit-sizer" aria-hidden="true">${bankKitHtml(b.cur.worn, b.cur.carried)}</div>
-      <div class="kit-pouch store-panel"><div class="store-panel-head"><span>${esc(titled(name))}</span><b>${compact(worth(items))} GP</b></div>
+      <div class="kit-pouch store-panel"><div class="store-panel-head"><span class="store-name">${icon ? `<img src="${icon}" alt="">` : ""}${esc(titled(name))}</span><b>${compact(worth(items))} GP</b></div>
       ${note ? `<span class="muted small">${esc(note)}</span>` : ""}${items.length ? `<div class="bank-out-items">${items.map((it) => bankTile(it)).join("")}</div>` : `<span class="store-empty">Empty</span>`}</div>`;
   }
   const all = [...b.cur.worn, ...b.cur.carried, ...b.cur.guess, ...b.cur.pouch, ...b.cur.stored];
