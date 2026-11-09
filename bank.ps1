@@ -92,8 +92,13 @@ function Update-Bank {
   $geText = if ($plug.ge -and $plug.ge -ne "[]") { $plug.ge } else { "" }
   $prevGe = [regex]::Match([string]$last, ',"ge":(\[.*\])\}$').Groups[1].Value
   if ($prevGe -eq "[]") { $prevGe = "" }
-  $now = "$(& $toJson $items)|$(& $toJson $worn)|$(& $toJson $carried)|$hasOut|$(if ($null -ne $pouch) { & $toJson $pouch })|$geText"
-  $before = if ($prev) { "$(& $toJson $prev.items)|$(& $toJson $prev.worn)|$(& $toJson $prev.carried)|$([bool]$prev.PSObject.Properties['worn'])|$(if ($prev.PSObject.Properties['pouch']) { & $toJson $prev.pouch })|$prevGe" }
+  # Items inside other items / other storage, as ',"stored":{"key":[[id,qty],..],..}' (stores with items only, in
+  # key order); "" when there are none or the plugin didn't send them. Part of what's owned, so a change = a new line
+  $storedLists = @(foreach ($s in @($plug.storage)) { if ($s) { $l = ConvertFrom-ItemList $s.items; if (@($l).Count) { [pscustomobject]@{ key = $s.key; items = $l } } } })
+  $storedJson = if ($storedLists.Count) { ',"stored":{' + ((@(foreach ($s in $storedLists) { """$($s.key)"":$(& $toJson $s.items)" })) -join ",") + '}' } else { "" }
+  $prevStored = [regex]::Match([string]$last, ',"stored":\{[^}]*\}').Value
+  $now = "$(& $toJson $items)|$(& $toJson $worn)|$(& $toJson $carried)|$hasOut|$(if ($null -ne $pouch) { & $toJson $pouch })|$storedJson|$geText"
+  $before = if ($prev) { "$(& $toJson $prev.items)|$(& $toJson $prev.worn)|$(& $toJson $prev.carried)|$([bool]$prev.PSObject.Properties['worn'])|$(if ($prev.PSObject.Properties['pouch']) { & $toJson $prev.pouch })|$prevStored|$prevGe" }
   $changed = $now -ne $before
   $status = "no change"
   $lineT = $null
@@ -103,14 +108,16 @@ function Update-Bank {
     $pouchJson = if ($null -ne $pouch) { ',"pouch":' + (& $toJson $pouch) } else { "" }
     $geJson = if ($null -ne $plug.ge) { ',"ge":' + $plug.ge } else { "" }
     $line = "{""t"":""$lineT"",""saved"":$(ConvertTo-Json $saved),""src"":""$src""," +
-      """items"":$(& $toJson $items),""worn"":$(& $toJson $worn),""carried"":$(& $toJson $carried)$pouchJson$geJson}"
+      """items"":$(& $toJson $items),""worn"":$(& $toJson $worn),""carried"":$(& $toJson $carried)$pouchJson$storedJson$geJson}"
     [IO.File]::AppendAllText($histFile, $line + "`n", $Utf8)
     $status = "saved ($($items.Count) items, $($worn.Count) worn, $($carried.Count) carried)"
   }
   # When the gear was last known (lines are only written on change, so this lives apart). "seen" = when the
   # plugin last wrote its file, i.e. the gear as of then; RuneLite may be closed now.
   $inv = "[" + ((@(foreach ($s in @($plug.invLayout)) { if ($s) { "[$($s[0]),$($s[1]),$($s[2])]" } })) -join ",") + "]"
-  Save-BankFile "gear.json" "{""t"":""$((Get-Date).ToUniversalTime().ToString("o"))"",""src"":""plugin"",""seen"":""$($plug.updated.ToUniversalTime().ToString("o"))"",""inv"":$inv}"
+  # Each store's name, how it was read and when (the page's storage tabs), empty ones included
+  $storesJson = if ($null -ne $plug.storage) { ',"stores":{' + ((@(foreach ($s in @($plug.storage)) { if ($s) { """$($s.key)"":{""name"":$(ConvertTo-Json $s.name),""how"":""$($s.how)"",""at"":$($s.at)}" } })) -join ",") + '}' } else { "" }
+  Save-BankFile "gear.json" "{""t"":""$((Get-Date).ToUniversalTime().ToString("o"))"",""src"":""plugin"",""seen"":""$($plug.updated.ToUniversalTime().ToString("o"))"",""inv"":$inv$storesJson}"
 
 
   # Items that just left the bank keep a price too, so the page can show what you spent/sold
@@ -118,6 +125,7 @@ function Update-Bank {
   foreach ($list in $items, $worn, $carried, @($prev.items), @($prev.worn), @($prev.carried)) {
     foreach ($b in @($list)) { if ($b) { [void]$set.Add("$($b[0])") } }
   }
+  foreach ($s in $storedLists) { foreach ($b in @($s.items)) { if ($b) { [void]$set.Add("$($b[0])") } } }
   $ids = @($set)
   $names = try { Update-BankItems $ids } catch { "names unavailable: $($_.Exception.Message)" }
   $values = try { Update-BankDerived $ids } catch { "smart values unavailable: $($_.Exception.Message)" }

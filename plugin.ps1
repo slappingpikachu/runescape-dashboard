@@ -265,6 +265,14 @@ function Get-PluginContainers {
     bank = (& $conv $c.bank); equipment = (& $conv $c.equipment); inventory = (& $conv $c.inventory)
     # Rune pouch contents as the game has them; $null from plugin versions that didn't send it yet
     runePouch = if ($c.PSObject.Properties['runePouch']) { & $conv $c.runePouch } else { $null }
+    # Items inside other items / other storage (looting bag, bolt pouch, seed vault...): key -> name, how ("live",
+    # "open" = as last opened, "check" = as of the last Check), at (ms), items. Sorted by key (ordinal, like the app).
+    # $null from plugin versions that didn't send it yet
+    storage = if ($c.PSObject.Properties['storage'] -and $null -ne $c.storage) {
+      [string[]]$keys = @($c.storage.PSObject.Properties | ForEach-Object { $_.Name })
+      [Array]::Sort($keys, [StringComparer]::Ordinal)
+      , @(foreach ($k in $keys) { $s = $c.storage.$k; if ($s) { [pscustomobject]@{ key = $k; name = [string]$s.name; how = [string]$s.how; at = [long]$s.at; items = (& $conv $s.items) } } })
+    } else { $null }
     # Inventory as laid out in game: [slot, id, qty] (plugin versions from 2026-11-01 send the slot third)
     invLayout = @(foreach ($p in @($c.inventory)) { if ($p -and @($p).Count -ge 3) { , @([int]$p[2], [int]$p[0], [long]$p[1]) } })
     # Grand Exchange offers as the JSON text of a bank history line; $null from plugin versions that didn't send them

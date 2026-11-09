@@ -374,7 +374,7 @@ function renderData() {
 }
 
 // ---------- remembered view settings (this device only) ----------
-const PREF_KEYS = ["period", "chartMode", "skillSort", "bossSort", "feedFilter", "clogGroup", "questFilter", "questKind", "caStatus", "caTier", "gpTab", "bankSort", "killsTab", "killsSort", "killsHidden", "killsView", "secPeriods"];
+const PREF_KEYS = ["period", "chartMode", "skillSort", "bossSort", "feedFilter", "clogGroup", "questFilter", "questKind", "caStatus", "caTier", "gpTab", "bankSort", "storeTab", "killsTab", "killsSort", "killsHidden", "killsView", "secPeriods"];
 function savePrefs() {
   try { localStorage.setItem("osrs-dash-prefs", JSON.stringify(Object.fromEntries(PREF_KEYS.map((k) => [k, state[k]])))); } catch {}
 }
@@ -397,6 +397,7 @@ function loadPrefs() {
   if (typeof p.caTier === "string" || p.caTier === null) state.caTier = p.caTier;
   if (["unit", "stack"].includes(p.gpTab)) state.gpTab = p.gpTab;
   if (["bank", "value", "name"].includes(p.bankSort)) state.bankSort = p.bankSort;
+  if (typeof p.storeTab === "string") state.storeTab = p.storeTab; // a tab that's gone falls back to the first
   if (typeof p.killsTab === "string") state.killsTab = p.killsTab;
   if (Array.isArray(p.killsHidden)) state.killsHidden = p.killsHidden.filter((k) => typeof k === "string");
   if (["kills", "value", "recent", "name"].includes(p.killsSort)) state.killsSort = p.killsSort;
@@ -1957,6 +1958,8 @@ $("ca-card").addEventListener("input", (e) => {
 // on Refresh (bank.ps1) and keeps a line per change. Value = quantity × today's GE price.
 
 const bankName = (id) => titled(state.bank?.names[id]?.[0] || itemName(id));
+// Items inside other items and in other storage ("stored" in a bank save: {key: [[id, qty], ..]}) as one list
+const storedList = (s) => Object.values(s ?? {}).flat().filter(([, q]) => q > 0);
 const bankPrice = (id) => bankValue(id).gp;
 const bankTier = (id) => VALUE_TIERS.find(([min]) => bankPrice(id) >= min)?.[1] ?? "";
 
@@ -1969,12 +1972,13 @@ function setBank(raw) {
   // older lines carry in data\bank\history.jsonl; the saved history is never changed.
   const some = (list) => (list ?? []).filter(([, q]) => q > 0);
   const lines = raw.history.map((l) => ({ t: new Date(l.t), key: l.t, saved: l.saved, src: SAVE_KIND[l.src] ?? "bank", gearKnown: false, items: l.items,
-    worn: some(l.worn), carried: some(l.carried), tracked: !!l.worn, guess: [], pouch: [], pouchSaved: l.pouch, offers: l.ge ?? null, ge: l.ge ? geHeld(l.ge) : [] }));
+    worn: some(l.worn), carried: some(l.carried), tracked: !!l.worn, guess: [], pouch: [], pouchSaved: l.pouch, offers: l.ge ?? null, ge: l.ge ? geHeld(l.ge) : [],
+    storedBy: l.stored ?? {}, stored: storedList(l.stored) }));
   const first = lines.find((l) => l.tracked);
   // gear.t = the last Refresh that read the gear (before gear.json existed: the first tracked line)
   const liveAt = raw.gear?.t ? new Date(raw.gear.t) : first?.t ?? null;
   // gear.seen = when the plugin last wrote its file
-  state.bank = { lines, cur: lines.at(-1), liveAt, gearSeen: raw.gear?.seen ? new Date(raw.gear.seen) : null, invLayout: raw.gear?.inv?.length ? raw.gear.inv : null, names: raw.items ?? {}, prices: raw.prices?.prices ?? {},
+  state.bank = { lines, cur: lines.at(-1), liveAt, gearSeen: raw.gear?.seen ? new Date(raw.gear.seen) : null, invLayout: raw.gear?.inv?.length ? raw.gear.inv : null, stores: raw.gear?.stores ?? {}, names: raw.items ?? {}, prices: raw.prices?.prices ?? {},
     mapping: raw.mapping ?? {}, derived: raw.derived ?? {}, slots: raw.slots ?? {}, values: new Map(),
     live: raw.live ?? null, reset: raw.reset ?? null, past: raw.past ?? null, days: raw.days ?? {} };
   // Saves from before gear was tracked: assume the gear of the first tracked save was already out, except
@@ -2101,7 +2105,7 @@ function setBank(raw) {
     }, 0);
   };
   const valueAt = (l, table) => {
-    const out = worthAt(l.worn, table) + worthAt(l.carried, table) + worthAt(l.guess, table) + worthAt(l.pouch, table);
+    const out = worthAt(l.worn, table) + worthAt(l.carried, table) + worthAt(l.guess, table) + worthAt(l.pouch, table) + worthAt(l.stored, table);
     const ge = worthAt(l.ge, table);
     return [worthAt(l.items, table) + out + ge, out, ge];
   };
@@ -2109,10 +2113,12 @@ function setBank(raw) {
   // What you own right now at today's prices (the newest save can be from an earlier day)
   [state.bank.now, state.bank.nowOut, state.bank.nowGe] = valueAt(state.bank.cur, live);
 }
-// Everything you own in one save: bank + worn + carried + Grand Exchange + the estimates (probably carried, rune pouch)
+// Everything you own in one save: bank + worn + carried + Grand Exchange + storage (looting bag, bolt pouch, seed
+// vault...) + the estimates (probably carried, rune pouch). Storage counts, so moving an item into a tackle box or
+// out of a looting bag is not a loss or a gain.
 function ownedMap(line, withPouch = true) {
   const m = new Map();
-  for (const [id, q] of [...line.items, ...line.worn, ...line.carried, ...line.ge, ...line.guess, ...(withPouch ? line.pouch : [])]) m.set(id, (m.get(id) ?? 0) + q);
+  for (const [id, q] of [...line.items, ...line.worn, ...line.carried, ...line.ge, ...line.stored, ...line.guess, ...(withPouch ? line.pouch : [])]) m.set(id, (m.get(id) ?? 0) + q);
   return m;
 }
 
@@ -2200,13 +2206,77 @@ function bankKitHtml(worn, carried) {
     </div>${loose.length ? `<div class="bank-out-items">${loose.map((it) => bankTile(it)).join("")}</div>` : ""}`;
 }
 
+// Storage tabs beside "Equipped & Inventory", in this order: [key in the plugin's "storage", name, icon item].
+// Keys the page doesn't know yet go last, named by the plugin. Only stores with something in them get a tab.
+const STORE_TABS = [
+  ["runePouch", "Rune pouch", 12791], ["boltPouch", "Bolt pouch", 9433], ["quiver", "Dizana's quiver", 28947],
+  ["essencePouches", "Essence pouches", 26784], ["lootingBag", "Looting bag", 11941], ["herbSack", "Herb sack", 13226],
+  ["seedBox", "Seed box", 13639], ["gemBag", "Gem bag", 12020], ["coalBag", "Coal bag", 12019],
+  ["logBasket", "Log basket", 28140], ["fishBarrel", "Fish barrel", 25582], ["plankSack", "Plank sack", 24882],
+  ["tackleBox", "Tackle box", 25580], ["forestryKit", "Forestry kit", 28136], ["huntsmansKit", "Huntsman's kit", 29309],
+  ["scrollBook", "Master scroll book", 21389], ["chuggingBarrel", "Chugging barrel", 30000],
+  ["potionStorage", "Potion storage", 2434], ["seedVault", "Seed vault", 5295], ["leprechaun", "Tool leprechaun", 5341],
+  ["costumeRoom", "Costume room", null],
+];
+const KIT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5a4 4 0 0 1 8 0v2"/><rect x="4" y="7" width="16" height="14" rx="3"/><path d="M9 12h6"/></svg>`;
+// [key, name, icon, items, store info from gear.json] for each tab of the current save
+function bankStoreTabs() {
+  const b = state.bank, cur = b.cur, tabs = [["kit", "Equipped & Inventory", null, [...cur.worn, ...cur.carried, ...cur.guess], null]];
+  if (cur.pouch.length) tabs.push(["runePouch", "Rune pouch", itemIcon(12791), cur.pouch, { how: "live" }]);
+  const known = new Set(STORE_TABS.map(([k]) => k));
+  const keys = [...STORE_TABS.map(([k]) => k), ...Object.keys(cur.storedBy).filter((k) => !known.has(k))];
+  for (const key of keys) {
+    const items = (cur.storedBy[key] ?? []).filter(([, q]) => q > 0);
+    if (!items.length || key === "runePouch") continue;
+    const meta = STORE_TABS.find(([k]) => k === key);
+    const ico = meta?.[2] ? itemIcon(meta[2]) : key === "costumeRoom" ? skillIcon("Construction") : null;
+    tabs.push([key, b.stores[key]?.name || meta?.[1] || key, ico, items, b.stores[key] ?? null]);
+  }
+  return tabs;
+}
+// How current a store is: "live" = always (the game reports it), "open" = as of the last time it was open,
+// "check" = as of the last Check (the game shows nothing else of it)
+function storeNote(info) {
+  if (!info?.how) return "";
+  if (info.how === "live") return "Always up to date";
+  const when = info.at ? fmtDate(new Date(info.at), { hour: "numeric", minute: "2-digit", day: "numeric", month: "short" }) : "";
+  return `${info.how === "check" ? "As of your last Check" : "As last opened"}${when ? ` · ${when}` : ""}`;
+}
+// The "Equipped & Inventory" column: a tab per storage, each counted in the bank value
+function bankOutHtml() {
+  const b = state.bank, tabs = bankStoreTabs();
+  const sel = tabs.find(([k]) => k === state.storeTab) ?? tabs[0];
+  const [key, name, , items, info] = sel;
+  const worth = (list) => list.reduce((s, [id, q]) => s + q * (b.live ? bankValue(id, b.live.prices).gp : bankPrice(id)), 0);
+  const tabRow = tabs.length > 1 ? `<div class="pill-toggle feed-filter store-tabs" id="store-tabs" role="tablist" aria-label="Inventory and storage">${tabs.map(([k, n, ico]) =>
+    `<button type="button" role="tab" data-store-tab="${esc(k)}" class="${k === key ? "active" : ""}" aria-selected="${k === key}" title="${esc(n)}" aria-label="${esc(n)}">${ico ? `<img src="${ico}" alt="">` : KIT_SVG}<span>${esc(n)}</span></button>`).join("")}</div>` : "";
+  let body;
+  if (key === "kit") {
+    body = `${b.cur.worn.length || b.cur.carried.length || b.liveAt ? bankKitHtml(b.cur.worn, b.cur.carried) : ""}
+      ${b.cur.guess.length ? `<div class="kit-pouch" title="RuneLite wasn't running at the last Update, so these left the bank and are counted as still carried until it can check">
+        <span class="muted small">≈ Probably carried</span><div class="bank-out-items">${b.cur.guess.map((it) => bankTile(it)).join("")}</div></div>` : ""}`;
+  } else {
+    const note = key === "runePouch" && !b.cur.carried.some(([id]) => /rune pouch/i.test(bankName(id))) ? "Always up to date · the pouch is in the bank" : storeNote(info);
+    // The equipment + inventory boxes stay in place (invisible, no height) so the column keeps its width on every tab
+    body = `<div class="kit-sizer" aria-hidden="true">${bankKitHtml(b.cur.worn, b.cur.carried)}</div>
+      <div class="kit-pouch store-panel"><div class="store-panel-head"><span>${esc(name)}</span><b>${compact(worth(items))} GP</b></div>
+      ${note ? `<span class="muted small">${esc(note)}</span>` : ""}<div class="bank-out-items">${items.map((it) => bankTile(it)).join("")}</div></div>`;
+  }
+  const all = [...b.cur.worn, ...b.cur.carried, ...b.cur.guess, ...b.cur.pouch, ...b.cur.stored];
+  return `<div class="bank-out-head"><h4>${tabs.length > 1 ? "Inventory &amp; Storage" : "Equipped &amp; Inventory"}</h4>${all.length ? `<b title="Everything outside the bank">${compact(b.nowOut)} GP</b>` : ""}</div>
+    ${tabRow}${body}`;
+}
+
 function renderBank() {
   const card = $("bank-card"), b = state.bank;
   card.hidden = !b;
   if (!b) return;
   const cur = b.cur.items;
   const coins = [...cur, ...b.cur.carried].reduce((s, [id, q]) => s + (id === 995 ? q : id === 13204 ? q * 1000 : 0), 0);
-  const out = [...b.cur.worn, ...b.cur.carried, ...b.cur.guess, ...b.cur.pouch];
+  const out = [...b.cur.worn, ...b.cur.carried, ...b.cur.guess, ...b.cur.pouch, ...b.cur.stored];
+  const incl = [...(b.cur.worn.length || b.cur.carried.length || b.cur.guess.length ? ["Worn", "Carried"] : []),
+    ...(b.cur.pouch.length || b.cur.stored.length ? ["Storage"] : []), ...(b.cur.ge.length ? ["GE"] : [])];
+  const inclText = incl.length ? ` (Incl. ${incl.length > 1 ? `${incl.slice(0, -1).join(", ")} &amp; ${incl.at(-1)}` : incl[0]})` : "";
   // Most valuable: live GE price from the last Refresh, not the once-a-day one
   const stack = ([id, q]) => q * (b.live ? bankValue(id, b.live.prices).gp : bankPrice(id));
   const best = cur.reduce((a, it) => (stack(it) > stack(a) ? it : a), cur[0]);
@@ -2224,7 +2294,7 @@ function renderBank() {
        <div class="bank-summary">
         <div class="bank-hero">
           <div class="clog-gp-top">
-            <div><span>Bank Value${b.cur.ge.length ? ` (Incl. ${out.length ? "Worn, Carried &amp; " : ""}GE)` : out.length ? " (Incl. Worn &amp; Carried)" : ""}</span><b title="${Math.round(b.now).toLocaleString()} GP${b.nowGe ? `\n${Math.round(b.nowGe).toLocaleString()} GP in the Grand Exchange` : ""}">${compact(b.now)} GP</b></div>
+            <div><span>Bank Value${inclText}</span><b title="${Math.round(b.now).toLocaleString()} GP${b.nowGe ? `\n${Math.round(b.nowGe).toLocaleString()} GP in the Grand Exchange` : ""}">${compact(b.now)} GP</b></div>
             <div class="clog-period" id="bank-period"></div>
           </div>
           <div id="bank-spark">${bankSparkHtml(secPeriod("bank"))}</div>
@@ -2235,14 +2305,7 @@ function renderBank() {
           ${best ? `<div class="clog-stat bank-best"><span>Most Valuable</span>${bankTile(best, "faint")}<b title="${Math.round(stack(best)).toLocaleString()} GP${b.live ? " · live price at the last Update" : ""}">${compact(stack(best))}</b><small>${esc(bankName(best[0]))}${best[1] > 1 ? ` × ${compact(best[1])}` : ""}</small></div>` : ""}
         </div>
        </div>
-        <div class="bank-out">
-          <div class="bank-out-head"><h4>Equipped &amp; Inventory</h4>${out.length ? `<b>${compact(b.nowOut)} GP</b>` : ""}</div>
-          ${out.length || b.liveAt ? bankKitHtml(b.cur.worn, b.cur.carried) : ""}
-          ${b.cur.guess.length ? `<div class="kit-pouch" title="RuneLite wasn't running at the last Update, so these left the bank and are counted as still carried until it can check">
-            <span class="muted small">≈ Probably carried</span><div class="bank-out-items">${b.cur.guess.map((it) => bankTile(it)).join("")}</div></div>` : ""}
-          ${b.cur.pouch.length ? `<div class="kit-pouch">
-            <span class="muted small">In your rune pouch${b.cur.carried.some(([id]) => /rune pouch/i.test(bankName(id))) ? "" : " (pouch is in the bank)"}</span><div class="bank-out-items">${b.cur.pouch.map((it) => bankTile(it)).join("")}</div></div>` : ""}
-        </div>
+        <div class="bank-out" id="bank-out">${out.length || b.liveAt ? bankOutHtml() : ""}</div>
       </div>
       <div class="bank-bottom">
       <div class="bank-right">
@@ -2516,6 +2579,14 @@ $("bank-card").addEventListener("click", (e) => {
     list.scrollTop = keep;
     const above = list.getBoundingClientRect().top - day.getBoundingClientRect().top;
     if (above > 0) list.scrollTop -= above;
+    return;
+  }
+  // A storage tab: only the column redraws (the bank list, search and graph stay as they are)
+  const st = e.target.closest("[data-store-tab]");
+  if (st) {
+    state.storeTab = st.dataset.storeTab;
+    savePrefs();
+    $("bank-out").innerHTML = bankOutHtml();
     return;
   }
   const s = e.target.closest("[data-bank-sort]");

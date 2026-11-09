@@ -1345,7 +1345,17 @@ button.dt.rd-ok::after { content: ""; position: absolute; top: 4px; right: 4px; 
    rune pouch, the note) wrap inside that width instead of widening it: width 0 + min-width 100% keeps
    them out of the column's size. Without this, 19 "probably carried" items in one row squeezed the bank
    value column beside it to a few px. */
-.bank-out > .kit-pouch, .bank-out > p { width: 0; min-width: 100%; }
+.bank-out > .kit-pouch, .bank-out > p, .bank-out > .store-tabs { width: 0; min-width: 100%; }
+/* Storage tabs: the Recent Activity tab look (icon tabs, the active one opens to show its name, gold underline),
+   wrapping onto more rows when there are many */
+.store-tabs { flex-wrap: wrap; justify-content: flex-start; }
+.store-tabs button.active { flex: 0 0 auto; padding: 0 10px; }
+.store-tabs button.active span { max-width: 200px; }
+/* Keeps the column as wide as the equipment + inventory boxes while another tab is shown */
+.kit-sizer { height: 0; overflow: hidden; visibility: hidden; margin-bottom: -8px; }
+.kit-pouch.store-panel { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 8px; }
+.store-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-weight: 700; }
+.store-panel-head b { color: var(--green); font-variant-numeric: tabular-nums; }
 .bank-out-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .bank-out-head h4 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); font-weight: 600; }
 .bank-out-head b { font-size: 14.5px; font-weight: 800; color: var(--green); font-variant-numeric: tabular-nums; }

@@ -284,10 +284,22 @@ pub struct Containers {
     pub equipment: Pairs,
     pub inventory: Pairs,
     pub rune_pouch: Option<Pairs>,
+    // Items inside other items / other storage, sorted by key; None from plugin versions that didn't send it yet
+    pub storage: Option<Vec<Store>>,
     pub inv_layout: Vec<(i64, i64, i64)>, // [slot, id, qty]
     pub ge: Option<String>,               // offers as the JSON text of a bank history line
     pub bank_at: i64,
     pub updated: DateTime<Utc>,
+}
+
+// One store of containers.json "storage" (looting bag, bolt pouch, seed vault...): how = "live" / "open" (as last
+// opened) / "check" (as of the last Check), at = ms
+pub struct Store {
+    pub key: String,
+    pub name: String,
+    pub how: String,
+    pub at: i64,
+    pub items: Pairs,
 }
 
 // None when there is no file or the bank was never opened with the plugin on ("bank": [] = really empty)
@@ -332,6 +344,20 @@ pub fn containers(ctx: &Ctx) -> Res<Option<Containers>> {
         equipment: conv(prop(&c, "equipment")),
         inventory: conv(prop(&c, "inventory")),
         rune_pouch: prop(&c, "runePouch").map(|p| conv(Some(p))),
+        storage: prop(&c, "storage").filter(|s| !s.is_null()).map(|s| {
+            let mut list: Vec<(String, Value)> = props(Some(s));
+            list.sort_by(|a, b| a.0.cmp(&b.0)); // ordinal, like the scripts
+            list.into_iter()
+                .filter(|(_, v)| truthy(v))
+                .map(|(key, v)| Store {
+                    key,
+                    name: ps_string(prop(&v, "name")),
+                    how: ps_string(prop(&v, "how")),
+                    at: ps_long(prop(&v, "at")),
+                    items: conv(prop(&v, "items")),
+                })
+                .collect()
+        }),
         inv_layout,
         bank_at: ps_long(prop(&c, "bankAt")),
         updated: parse_time_or_err(&ps_string(prop(&c, "updated")))?,

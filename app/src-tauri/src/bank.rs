@@ -138,8 +138,24 @@ pub fn update(ctx: &Ctx) -> Res<String> {
     let no_empty = |s: &str| if s == "[]" { String::new() } else { s.to_string() };
     let ge_text = plug.ge.as_deref().map(no_empty).unwrap_or_default();
     let prev_ge = last.as_deref().and_then(|l| LINE_GE.captures(l)).map(|c| no_empty(&c[1])).unwrap_or_default();
+    // Items inside other items / other storage: ',"stored":{"key":[[id,qty],..],..}' (stores with items only, in key
+    // order), "" when there are none. Part of what's owned, so a change = a new line
+    let stored_lists: Vec<(String, Pairs)> = plug
+        .storage
+        .iter()
+        .flatten()
+        .map(|s| (s.key.clone(), from_item_list(&s.items)))
+        .filter(|(_, l)| !l.is_empty())
+        .collect();
+    let stored_json = if stored_lists.is_empty() {
+        String::new()
+    } else {
+        let parts: Vec<String> = stored_lists.iter().map(|(k, l)| format!("\"{k}\":{}", pairs_json(l))).collect();
+        format!(",\"stored\":{{{}}}", parts.join(","))
+    };
+    let prev_stored = last.as_deref().and_then(|l| LINE_STORED.find(l)).map(|m| m.as_str().to_string()).unwrap_or_default();
     let now_sig = format!(
-        "{}|{}|{}|True|{}|{ge_text}",
+        "{}|{}|{}|True|{}|{stored_json}|{ge_text}",
         pairs_json(&items),
         pairs_json(&worn),
         pairs_json(&carried),
@@ -147,7 +163,7 @@ pub fn update(ctx: &Ctx) -> Res<String> {
     );
     let before = prev.as_ref().map(|p| {
         format!(
-            "{}|{}|{}|{}|{}|{prev_ge}",
+            "{}|{}|{}|{}|{}|{prev_stored}|{prev_ge}",
             value_pairs_json(prop(p, "items")),
             value_pairs_json(prop(p, "worn")),
             value_pairs_json(prop(p, "carried")),
@@ -162,7 +178,7 @@ pub fn update(ctx: &Ctx) -> Res<String> {
         let pouch_json = pouch.as_ref().map(|p| format!(",\"pouch\":{}", pairs_json(p))).unwrap_or_default();
         let ge_json = plug.ge.as_ref().map(|g| format!(",\"ge\":{g}")).unwrap_or_default();
         let line = format!(
-            "{{\"t\":\"{t}\",\"saved\":{},\"src\":\"plugin\",\"items\":{},\"worn\":{},\"carried\":{}{pouch_json}{ge_json}}}",
+            "{{\"t\":\"{t}\",\"saved\":{},\"src\":\"plugin\",\"items\":{},\"worn\":{},\"carried\":{}{pouch_json}{stored_json}{ge_json}}}",
             ps_str(&saved),
             pairs_json(&items),
             pairs_json(&worn),
@@ -174,10 +190,22 @@ pub fn update(ctx: &Ctx) -> Res<String> {
     }
     // When the gear was last known ("seen" = when the plugin last wrote its file)
     let inv = plug.inv_layout.iter().map(|(a, b, c)| format!("[{a},{b},{c}]")).collect::<Vec<_>>().join(",");
+    // Each store's name, how it was read and when (the page's storage tabs), empty ones included
+    let stores_json = plug
+        .storage
+        .as_ref()
+        .map(|list| {
+            let parts: Vec<String> = list
+                .iter()
+                .map(|s| format!("\"{}\":{{\"name\":{},\"how\":\"{}\",\"at\":{}}}", s.key, ps_str(&s.name), s.how, s.at))
+                .collect();
+            format!(",\"stores\":{{{}}}", parts.join(","))
+        })
+        .unwrap_or_default();
     save(
         ctx,
         "gear.json",
-        &format!("{{\"t\":\"{}\",\"src\":\"plugin\",\"seen\":\"{}\",\"inv\":[{inv}]}}", iso(now()), iso(plug.updated)),
+        &format!("{{\"t\":\"{}\",\"src\":\"plugin\",\"seen\":\"{}\",\"inv\":[{inv}]{stores_json}}}", iso(now()), iso(plug.updated)),
     )?;
 
     // Items that just left the bank keep a price too
@@ -192,6 +220,11 @@ pub fn update(ctx: &Ctx) -> Res<String> {
             for id in value_ids(prop(p, f)) {
                 set.insert(id);
             }
+        }
+    }
+    for (_, list) in &stored_lists {
+        for (id, _) in list {
+            set.insert(id.to_string());
         }
     }
     let ids: Vec<String> = set.iter().cloned().collect();
@@ -487,6 +520,7 @@ static KC_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""(\d+)":"#).unwra
 static GE_LIST: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""ge"\s*:\s*\[([^\]]*)\]"#).unwrap());
 static GE_ID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#""id"\s*:\s*(\d+)"#).unwrap());
 static LINE_GE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#","ge":(\[.*\])\}$"#).unwrap());
+static LINE_STORED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#","stored":\{[^}]*\}"#).unwrap());
 
 // Item ids in the plugin's current Grand Exchange offers (containers.json "ge")
 fn ge_ids(ctx: &Ctx) -> Vec<String> {

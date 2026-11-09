@@ -150,6 +150,29 @@ Set-PluginFiles @{ "containers.json" = "{""updated"":""$(& $iso $now)"",""bank""
 Check "ge: old plugin file without ge writes nothing" { [void](Update-Bank); $l = @(& $bankLines); if ($l.Count -ne 4) { throw "$($l.Count) lines" }; "ok" }
 Check "ge: old plugin file gives a line without ge" { Reset-Data; [void](Update-Bank); $l = @(& $bankLines)[-1]; if ($l -match '"ge"') { throw $l }; "ok" }
 
+# ---------------------------------------------------------------- 2a2. Storage (looting bag, bolt pouch, seed vault...)
+# Plugin "storage": key -> {name, how, at, items}. Bank lines get "stored" (stores with items, key order) before "ge";
+# gear.json gets every store's name / how / at.
+$stFile = { param($storage) "{""updated"":""$(& $iso $now)"",""bank"":[[995,10,0]],""bankAt"":1793608110328,""inventory"":[],""equipment"":[],""storage"":$storage,""ge"":[]}" }
+$st1 = "{""tackleBox"":{""name"":""Tackle box"",""how"":""open"",""at"":1793608000000,""items"":[[313,500]]},""boltPouch"":{""name"":""Bolt pouch"",""how"":""live"",""at"":1793608100000,""items"":[[9144,120],[9243,3]]},""coalBag"":{""name"":""Coal bag"",""how"":""check"",""at"":1793608200000,""items"":[]},""huntsmansKit"":{""name"":""Huntsman's kit"",""how"":""open"",""at"":1793608300000,""items"":[[10008,2]]}}"
+Set-PluginFiles @{ "containers.json" = (& $stFile $st1) }
+Check "storage: stores with items on the line, in key order, before ge" { Reset-Data; [void](Update-Bank); $l = @(& $bankLines)[-1]
+  if ($l -notmatch ',"stored":\{"boltPouch":\[\[9144,120\],\[9243,3\]\],"huntsmansKit":\[\[10008,2\]\],"tackleBox":\[\[313,500\]\]\},"ge":\[\]\}$') { throw $l }; "boltPouch, huntsmansKit, tackleBox" }
+Check "storage: gear.json lists every store (empty ones too)" { $g = Parse ([IO.File]::ReadAllText("$DataDir\bank\gear.json")); $k = @($g.stores.PSObject.Properties.Name)
+  if (($k -join ",") -ne "boltPouch,coalBag,huntsmansKit,tackleBox") { throw ($k -join ",") }
+  if ($g.stores.huntsmansKit.name -ne "Huntsman's kit" -or $g.stores.coalBag.how -ne "check" -or $g.stores.tackleBox.at -ne 1793608000000) { throw ($g.stores | ConvertTo-Json -Compress) }; "4 stores, names/how/at ok" }
+Check "storage: same storage writes no new line" { [void](Update-Bank); $n = @(& $bankLines).Count; if ($n -ne 1) { throw "$n lines" }; "1 line" }
+Set-PluginFiles @{ "containers.json" = (& $stFile ($st1 -replace '\[\[313,500\]\]', '[[313,450]]')) }
+Check "storage: a change only in a store writes a line" { [void](Update-Bank); $n = @(& $bankLines).Count; if ($n -ne 2) { throw "$n lines" }; "2 lines" }
+Set-PluginFiles @{ "containers.json" = (& $stFile "{""coalBag"":{""name"":""Coal bag"",""how"":""check"",""at"":1,""items"":[]}}") }
+Check "storage: all stores empty = no stored field" { [void](Update-Bank); $l = @(& $bankLines); if ($l[-1] -match '"stored"') { throw $l[-1] }; if ($l.Count -ne 3) { throw "$($l.Count) lines (emptying is a change)" }; "ok" }
+Set-PluginFiles @{ "containers.json" = (& $stFile "{}") }
+Check "storage: empty storage object = stores {} and no new line" { [void](Update-Bank); $g = [IO.File]::ReadAllText("$DataDir\bank\gear.json"); if ($g -notmatch ',"stores":\{\}\}$') { throw $g }; if (@(& $bankLines).Count -ne 3) { throw "new line" }; "ok" }
+Set-PluginFiles @{ "containers.json" = (& $geFile "[]") }
+Check "storage: old plugin file without storage = no stores in gear.json" { Reset-Data; [void](Update-Bank); $g = [IO.File]::ReadAllText("$DataDir\bank\gear.json"); if ($g -match '"stores"') { throw $g }; "ok" }
+Set-PluginFiles @{ "containers.json" = (& $stFile "{""lootingBag"":{""name"":""Looting bag"",""how"":""open"",""at"":5,""items"":[[11840,1]]}}") }
+Check "storage: a single-item store stays a list of pairs" { Reset-Data; [void](Update-Bank); $p = Parse (@(& $bankLines)[-1]); if (-not ($p.stored.lootingBag[0] -is [array])) { throw ($p.stored | ConvertTo-Json -Compress) }; "[[11840,1]]" }
+
 # ---------------------------------------------------------------- 2b. Drop log gaps (kills done without the plugin)
 # Loot Tracker totals (killcounts.json) vs loot.jsonl: every type (monster, boss, clue, chest, pickpocket) must end up
 # in the drop log exactly once, with the right drops
