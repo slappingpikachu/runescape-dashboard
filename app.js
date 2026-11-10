@@ -468,6 +468,12 @@ const BOSS_NO_LOOT_FALLBACK = new Set(["Doom of Mokhaiotl", "The Gauntlet", "Cry
 const GAUNTLET_LOOT = new Set(["Crystalline Hunllef", "Corrupted Hunllef"]);
 const CRYSTAL_SHARD = 23962; // in every Gauntlet chest from a win, never in one from a loss
 const hiscoresKills = (name) => (BOSS_NO_LOOT_FALLBACK.has(name) ? state.history.at(-1)?.bosses?.[BOSS_LOOT_NAME_REV[name] ?? name] ?? 0 : null);
+// The hiscores kill count of the boss a Loot Tracker source is (by name, BOSS_LOOT_NAME, or CA_BOSS_ALIAS), 0 if none
+function hiscoresBossKills(name) {
+  const bosses = state.history.at(-1)?.bosses ?? {};
+  for (const n of [BOSS_LOOT_NAME_REV[name], name, CA_BOSS_ALIAS[name]]) if (n && bosses[n] > 0) return bosses[n];
+  return 0;
+}
 // Kills the plugin's Loot Tracker counted for a hiscores boss (0 if none)
 function lootTrackerKills(name) {
   if (BOSS_NO_LOOT_FALLBACK.has(name)) return 0;
@@ -2669,7 +2675,12 @@ function killSources() {
         value += killPrice(id) * q;
         if (best == null || killPrice(id) > killPrice(best)) best = id;
       }
-      list.push({ key: `${type}|${name}`, type, name, kills: hiscoresKills(name) ?? r.kills ?? 0, value, best: best && killPrice(best) ? best : null, drops,
+      // Kill count = the hiscores one for every boss they track (user 2026-11-10: Vorkath 846 on the hiscores vs 187 in
+      // the Loot Tracker, which only counts since it was installed). Loot is only known for the Loot Tracker's kills
+      // (lootKills), so averages use those.
+      const lt = r.kills ?? 0, hs = hiscoresKills(name) ?? (type === "PICKPOCKET" ? 0 : hiscoresBossKills(name));
+      const kills = BOSS_NO_LOOT_FALLBACK.has(name) ? hs : Math.max(hs, lt);
+      list.push({ key: `${type}|${name}`, type, name, kills, lootKills: BOSS_NO_LOOT_FALLBACK.has(name) ? kills : lt, value, best: best && killPrice(best) ? best : null, drops,
         first: r.first ? new Date(r.first) : null, last: r.last ? new Date(r.last) : null });
     }
   }
@@ -2716,7 +2727,9 @@ function renderKills() {
   ].filter(([, s]) => s);
   const countLabel = { BOSS: "Boss Kills", NPC: "Kills", EVENT: "Opened", PICKPOCKET: "Pickpockets", PLAYER: "Kills" }[state.killsTab] ?? "Times Looted";
   const countIcon = { BOSS: wikiIcon("Combat_icon.png"), NPC: skillIcon("Attack"), PLAYER: skillIcon("Attack"), EVENT: gameIcon("cluescrollsall"), PICKPOCKET: skillIcon("Thieving") }[state.killsTab] ?? skillIcon("Slayer");
-  const avg = kills ? value / kills : 0;
+  const lootKills = inTab.reduce((s, x) => s + x.lootKills, 0);
+  const avg = lootKills ? value / lootKills : 0;
+  const avgOf = lootKills < kills ? `per ${killUnit(state.killsTab)} · from ${lootKills.toLocaleString()} with loot` : `per ${killUnit(state.killsTab)}`;
   const log = state.killsView === "log";
   card.innerHTML = `
     <div class="card-head">
@@ -2727,7 +2740,7 @@ function renderKills() {
     <div class="clog-stats kill-stats">
       <div class="clog-stat kill-top"><span class="cat-ic"><img src="${countIcon}" alt=""></span><div><span>${esc(countLabel)}</span><b>${kills.toLocaleString()}</b><small>${inTab.length.toLocaleString()} different</small></div></div>
       <div class="clog-stat kill-top"><span class="cat-ic"><img src="${itemIcon(995)}" alt=""></span><div><span>Loot Value</span><b class="pos">${compact(value)}</b><small>GE Price Now</small></div></div>
-      <div class="clog-stat kill-top"><span class="cat-ic avg-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V6M16 20v-8M22 20H2"/><path d="M3 9.5 9.5 6l6.5 5.5L21 7" class="avg-line"/></svg></span><div><span>Average Loot</span><b class="pos">${avg ? compact(avg) : "–"}</b><small>per ${killUnit(state.killsTab)}</small></div></div>
+      <div class="clog-stat kill-top"><span class="cat-ic avg-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V6M16 20v-8M22 20H2"/><path d="M3 9.5 9.5 6l6.5 5.5L21 7" class="avg-line"/></svg></span><div><span>Average Loot</span><b class="pos">${avg ? compact(avg) : "–"}</b><small>${avgOf}</small></div></div>
       <div class="clog-stat kill-top">${best ? `<span class="cat-ic"><img src="${itemIcon(best.best)}" alt=""></span>` : ""}<div><span>Best Drop</span><b class="kill-stat-name">${best ? esc(bankName(best.best)) : "–"}</b><small>${best ? `${compact(killPrice(best.best))} · from ${esc(best.name)}` : ""}</small></div></div>
       ${tops.map(([label, s, unit]) => `<div class="clog-stat kill-top">
       ${killIconHtml(s)}<div><span>${label}</span><b class="kill-stat-name">${esc(titled(s.name))}</b><small>${s.kills.toLocaleString()} ${unit}</small></div>
@@ -2853,13 +2866,13 @@ function renderKillList() {
       <div class="kill-line">
       <button type="button" class="cat-row kill-row" data-kill="${esc(s.key)}" aria-expanded="${open}">
         ${killIconHtml(s)}
-        <span class="cat-name">${esc(titled(s.name))}<small class="cat-kc">${state.killsTab === "all" ? `${killTypeName(killGroup(s))} · ` : ""}${s.last ? `last ${day(s.last)}` : ""}</small></span>
-        <span class="kill-n"><b>${s.kills.toLocaleString()}</b> ${s.type === "NPC" || s.type === "PLAYER" || killGroup(s) === "BOSS" ? (s.kills === 1 ? "kill" : "kills") : "times"}</span>
-        <span class="kill-gp ${s.value >= 1e6 ? "big" : ""}" title="${s.value.toLocaleString()} GP of drops at today's GE prices${s.kills && s.value ? ` · ≈ ${Math.round(s.value / s.kills).toLocaleString()} GP each` : ""}">${s.value ? compact(s.value) : "–"}${s.kills && s.value ? `<small>${compact(s.value / s.kills)} each</small>` : ""}</span>
+        <span class="cat-name">${esc(titled(s.name))}<small class="cat-kc">${state.killsTab === "all" ? `${killTypeName(killGroup(s))} · ` : ""}${s.last ? `last ${day(s.last)}` : ""}${s.lootKills < s.kills ? ` · loot from ${s.lootKills.toLocaleString()} ${s.lootKills === 1 ? "kill" : "kills"}` : ""}</small></span>
+        <span class="kill-n" title="${s.lootKills < s.kills ? `${s.kills.toLocaleString()} on the hiscores · drops saved for ${s.lootKills.toLocaleString()}` : ""}"><b>${s.kills.toLocaleString()}</b> ${s.type === "NPC" || s.type === "PLAYER" || killGroup(s) === "BOSS" ? (s.kills === 1 ? "kill" : "kills") : "times"}</span>
+        <span class="kill-gp ${s.value >= 1e6 ? "big" : ""}" title="${s.value.toLocaleString()} GP of drops at today's GE prices${s.lootKills && s.value ? ` · ≈ ${Math.round(s.value / s.lootKills).toLocaleString()} GP each (${s.lootKills.toLocaleString()} ${s.lootKills === 1 ? "kill" : "kills"} with loot)` : ""}">${s.value ? compact(s.value) : "–"}${s.lootKills && s.value ? `<small>${compact(s.value / s.lootKills)} each</small>` : ""}</span>
       </button>
       <button type="button" class="kill-hide" data-kill-hide="${esc(s.key)}" title="${hiddenView ? "Show" : "Hide"} ${esc(s.name)}" aria-label="${hiddenView ? "Show" : "Hide"} ${esc(s.name)}">${hiddenView ? EYE : EYE_OFF}</button>
       </div>
-      ${open ? `<div class="cat-parts">${s.kills ? `≈ ${compact(s.value / s.kills)} GP each` : ""}${s.first ? ` · first ${day(s.first)}` : ""} · ${s.drops.length} different drops</div>
+      ${open ? `<div class="cat-parts">${s.lootKills ? `≈ ${compact(s.value / s.lootKills)} GP each` : ""}${s.first ? ` · first ${day(s.first)}` : ""} · ${s.drops.length} different drops</div>
         <div class="cat-items">${drops.length ? drops.map((d) => bankTile(d)).join("") : `<span class="muted small">No drops saved.</span>`}</div>` : ""}
     </div>`;
   }).join("") : `<p class="muted small kill-none">${hiddenView ? "Nothing hidden here." : "Nothing matches."}</p>`;
