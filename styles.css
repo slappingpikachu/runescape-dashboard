@@ -1362,6 +1362,9 @@ button.dt.rd-ok::after { content: ""; position: absolute; top: 4px; right: 4px; 
 .store-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 700; }
 .store-name { display: inline-flex; align-items: center; gap: 8px; font-size: 16.5px; color: var(--gold-2); }
 .store-name img { width: 26px; height: 26px; object-fit: contain; }
+/* Storage items you carry or wear: their contents under the inventory (no tab) */
+.store-carried .store-name { font-size: 15px; }
+.store-carried .store-name img { width: 22px; height: 22px; }
 .store-panel-head b { color: var(--green); font-variant-numeric: tabular-nums; }
 .bank-out-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .bank-out-head h4 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); font-weight: 600; }

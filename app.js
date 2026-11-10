@@ -2220,21 +2220,45 @@ const STORE_TABS = [
   ["costumeRoom", "Costume room", null],
 ];
 const KIT_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5a4 4 0 0 1 8 0v2"/><rect x="4" y="7" width="16" height="14" rx="3"/><path d="M9 12h6"/></svg>`;
-// [key, name, icon, items, store info from gear.json] for each tab of the current save
+// The item that holds each store, by name (every form: open/closed, upgraded, divine...). Worn or carried = its
+// contents show under the inventory instead of as a tab (user 2026-11-09). Stores without one are never carried.
+const STORE_ITEM = {
+  runePouch: /rune pouch/i, lootingBag: /^looting bag/i, boltPouch: /^bolt pouch/i, quiver: /dizana's (quiver|max cape)/i,
+  essencePouches: /essence pouch/i, herbSack: /herb sack/i, seedBox: /seed box/i, gemBag: /gem (bag|sack)/i,
+  coalBag: /coal bag/i, logBasket: /(log|forestry) basket/i, fishBarrel: /fish (sack )?barrel/i, plankSack: /plank sack/i,
+  tackleBox: /tackle box/i, forestryKit: /forestry kit/i, huntsmansKit: /huntsman's kit/i, scrollBook: /master scroll book/i,
+  chuggingBarrel: /chugging barrel/i,
+};
+// [key, name, icon, items, store info from gear.json] for each tab of the current save; .carried = the same rows for
+// stores whose item is worn or carried (shown under the inventory, no tab)
 function bankStoreTabs() {
   const b = state.bank, cur = b.cur, tabs = [["kit", "Equipped & Inventory", null, [...cur.worn, ...cur.carried, ...cur.guess], null]];
+  const carried = [];
+  const held = [...cur.worn, ...cur.carried].map(([id]) => bankName(id));
+  const isHeld = (key) => STORE_ITEM[key] && held.some((n) => STORE_ITEM[key].test(n));
   const ever = new Set(b.lines.flatMap((l) => Object.keys(l.storedBy).filter((k) => l.storedBy[k].some(([, q]) => q > 0))));
-  if (b.lines.some((l) => l.pouch.length)) tabs.push(["runePouch", "Rune pouch", itemIcon(12791), cur.pouch, { how: "live" }]);
+  if (isHeld("runePouch")) carried.push(["runePouch", "Rune pouch", itemIcon(12791), cur.pouch, { how: "live" }]);
+  else if (b.lines.some((l) => l.pouch.length)) tabs.push(["runePouch", "Rune pouch", itemIcon(12791), cur.pouch, { how: "live" }]);
   const known = new Set(STORE_TABS.map(([k]) => k));
   const keys = [...STORE_TABS.map(([k]) => k), ...[...ever].filter((k) => !known.has(k))];
   for (const key of keys) {
+    if (key === "runePouch") continue;
     const items = (cur.storedBy[key] ?? []).filter(([, q]) => q > 0);
-    if (!ever.has(key) || key === "runePouch") continue;
+    const holding = isHeld(key);
+    if (!ever.has(key) && !(holding && b.stores[key])) continue; // a carried bag the plugin has read shows even if never filled
     const meta = STORE_TABS.find(([k]) => k === key);
     const ico = meta?.[2] ? itemIcon(meta[2]) : key === "costumeRoom" ? skillIcon("Construction") : null;
-    tabs.push([key, b.stores[key]?.name || meta?.[1] || key, ico, items, b.stores[key] ?? null]);
+    (holding ? carried : tabs).push([key, b.stores[key]?.name || meta?.[1] || key, ico, items, b.stores[key] ?? null]);
   }
+  tabs.carried = carried;
   return tabs;
+}
+// One store's panel: icon + name, value, how current it is, its items (or "Empty")
+function storePanelHtml([key, name, icon, items, info], worth, extra = "") {
+  const b = state.bank;
+  const note = key === "runePouch" && !b.cur.carried.some(([id]) => /rune pouch/i.test(bankName(id))) ? "Always up to date · the pouch is in the bank" : storeNote(info);
+  return `<div class="kit-pouch store-panel${extra}"><div class="store-panel-head"><span class="store-name">${icon ? `<img src="${icon}" alt="">` : ""}${esc(titled(name))}</span><b>${compact(worth(items))} GP</b></div>
+      ${note ? `<span class="muted small">${esc(note)}</span>` : ""}${items.length ? `<div class="bank-out-items">${items.map((it) => bankTile(it)).join("")}</div>` : `<span class="store-empty">Empty</span>`}</div>`;
 }
 // How current a store is: "live" = always (the game reports it), "open" = as of the last time it was open,
 // "check" = as of the last Check (the game shows nothing else of it)
@@ -2248,7 +2272,7 @@ function storeNote(info) {
 function bankOutHtml() {
   const b = state.bank, tabs = bankStoreTabs();
   const sel = tabs.find(([k]) => k === state.storeTab) ?? tabs[0];
-  const [key, name, icon, items, info] = sel;
+  const [key] = sel;
   const worth = (list) => list.reduce((s, [id, q]) => s + q * (b.live ? bankValue(id, b.live.prices).gp : bankPrice(id)), 0);
   const tabRow = tabs.length > 1 ? `<div class="pill-toggle feed-filter store-tabs" id="store-tabs" role="tablist" aria-label="Inventory and storage">${tabs.map(([k, n, ico]) =>
     `<button type="button" role="tab" data-store-tab="${esc(k)}" class="${k === key ? "active" : ""}" aria-selected="${k === key}" title="${esc(n)}" aria-label="${esc(n)}">${ico ? `<img src="${ico}" alt="">` : KIT_SVG}<span>${esc(n)}</span></button>`).join("")}</div>` : "";
@@ -2256,16 +2280,15 @@ function bankOutHtml() {
   if (key === "kit") {
     body = `${b.cur.worn.length || b.cur.carried.length || b.liveAt ? bankKitHtml(b.cur.worn, b.cur.carried) : ""}
       ${b.cur.guess.length ? `<div class="kit-pouch" title="RuneLite wasn't running at the last Update, so these left the bank and are counted as still carried until it can check">
-        <span class="muted small">≈ Probably carried</span><div class="bank-out-items">${b.cur.guess.map((it) => bankTile(it)).join("")}</div></div>` : ""}`;
+        <span class="muted small">≈ Probably carried</span><div class="bank-out-items">${b.cur.guess.map((it) => bankTile(it)).join("")}</div></div>` : ""}
+      ${tabs.carried.map((row) => storePanelHtml(row, worth, " store-carried")).join("")}`;
   } else {
-    const note = key === "runePouch" && !b.cur.carried.some(([id]) => /rune pouch/i.test(bankName(id))) ? "Always up to date · the pouch is in the bank" : storeNote(info);
     // The equipment + inventory boxes stay in place (invisible, no height) so the column keeps its width on every tab
     body = `<div class="kit-sizer" aria-hidden="true">${bankKitHtml(b.cur.worn, b.cur.carried)}</div>
-      <div class="kit-pouch store-panel"><div class="store-panel-head"><span class="store-name">${icon ? `<img src="${icon}" alt="">` : ""}${esc(titled(name))}</span><b>${compact(worth(items))} GP</b></div>
-      ${note ? `<span class="muted small">${esc(note)}</span>` : ""}${items.length ? `<div class="bank-out-items">${items.map((it) => bankTile(it)).join("")}</div>` : `<span class="store-empty">Empty</span>`}</div>`;
+      ${storePanelHtml(sel, worth)}`;
   }
   const all = [...b.cur.worn, ...b.cur.carried, ...b.cur.guess, ...b.cur.pouch, ...b.cur.stored];
-  return `<div class="bank-out-head"><h4>${tabs.length > 1 ? "Inventory &amp; Storage" : "Equipped &amp; Inventory"}</h4>${all.length ? `<b title="Everything outside the bank">${compact(b.nowOut)} GP</b>` : ""}</div>
+  return `<div class="bank-out-head"><h4>${tabs.length > 1 || tabs.carried.length ? "Inventory &amp; Storage" : "Equipped &amp; Inventory"}</h4>${all.length ? `<b title="Everything outside the bank">${compact(b.nowOut)} GP</b>` : ""}</div>
     ${tabRow}${body}`;
 }
 
