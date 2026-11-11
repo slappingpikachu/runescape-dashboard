@@ -2980,9 +2980,13 @@ $("kills-card").addEventListener("input", (e) => {
 // Kills between refreshes: the server saves the Loot Tracker totals on each Refresh (data\plugin\kills-history.jsonl).
 // Returns history index -> [[key, gain], ...] for the refresh that picked them up.
 function killGainsByRefresh(h) {
-  const out = new Map(), kh = state.plugin?.killHistory ?? [];
+  // Gains are counted over the highest total seen so far, not the line before: after a Sync the history holds both
+  // devices' lines, and a line from a device whose Loot Tracker hadn't loaded everything yet must not make kills
+  // look new again on the next line.
+  const out = new Map(), kh = state.plugin?.killHistory ?? [], top = { ...(kh[0]?.k ?? {}) };
   for (let j = 1; j < kh.length; j++) {
-    const prev = kh[j - 1].k, cur = kh[j].k, t = +new Date(kh[j].t);
+    const prev = { ...top }, cur = kh[j].k, t = +new Date(kh[j].t);
+    for (const [key, n] of Object.entries(cur)) if (!(n <= top[key])) top[key] = n;
     let i = h.findIndex((s) => +s.time >= t - 5000);
     if (i === 0) continue;
     if (i < 0) i = h.length - 1;
@@ -4277,11 +4281,65 @@ function setupSync() {
   const when = (iso) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
   const loadStatus = async () => {
     const s = await fetch("/api/sync", { cache: "no-cache" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    // Automatic sync: the folder, this device's last save there, the other devices' files
+    const auto = [], g = s?.google ?? {};
+    if (g.connected) auto.push("Google Drive: connected");
+    else if (g.connecting) auto.push("Google Drive: finish signing in in your browser…");
+    if (g.error) auto.push(`Google Drive: ${g.error}`);
+    if (s && !s.folder && !g.connected) auto.push(s.folderSet ? `The sync folder ${s.folderSet} isn't there.` : g.available ? "Not syncing yet: connect Google Drive, or pick a folder." : "Not syncing yet: pick a folder that both computers sync.");
+    if (s?.folder) auto.push(`Folder: ${s.folder}`);
+    if (s?.folder || g.connected) {
+      auto.push(s.autoExported ? `This device saved: ${when(s.autoExported)}` : "This device saves its file on the next Update.");
+      for (const o of s.others ?? []) auto.push(`${o.name}: ${when(o.exported)}${o.merged ? " · merged" : " · merges on the next Update"}`);
+      if (!s.others?.length) auto.push("No file from your other device yet.");
+    }
+    if (s?.autoError) auto.push(`Problem: ${s.autoError}`);
+    $("sync-auto").textContent = auto.join("\n");
+    $("sync-auto").classList.toggle("sync-warn", !!(s && ((!s.folder && !g.connected) || s.autoError || g.error)));
+    $("sync-google").hidden = !g.available || g.connected;
+    $("sync-google-off").hidden = !g.connected;
+    $("sync-google").disabled = !!g.connecting;
+    // While the browser sign-in runs: look again every 2 s until it is done
+    clearTimeout(googlePoll);
+    if (g.connecting && !panel.hidden) googlePoll = setTimeout(loadStatus, 2000);
+    $("sync-folder-reset").hidden = !s?.folderSet;
     const parts = s ? [`This device: ${s.device}`] : [];
     if (s?.exported) parts.push(`Last export: ${when(s.exported)}`);
-    if (s?.imported) parts.push(`Last import: from ${s.imported.name}, exported ${when(s.imported.exported)}`);
+    if (s?.imported) parts.push(`Last merge: from ${s.imported.name}, saved ${when(s.imported.exported)}`);
     $("sync-status").textContent = parts.join(" · ");
   };
+  let googlePoll = 0;
+  $("sync-google").addEventListener("click", async () => {
+    const res = await fetch("/api/google/connect", { method: "POST", body: "{}" }).catch(() => null);
+    const body = await res?.json().catch(() => ({}));
+    if (!res?.ok) { toast(body?.error || "Could not start the Google sign-in.", "error"); return; }
+    toast("Sign in to Google in your browser, then come back here.", "success");
+    loadStatus();
+  });
+  $("sync-google-off").addEventListener("click", async () => {
+    await fetch("/api/google/disconnect", { method: "POST", body: "{}" }).catch(() => null);
+    toast("Google Drive disconnected on this computer.", "success");
+    loadStatus();
+  });
+  const setFolder = async (folder) => {
+    const res = await fetch("/api/sync-folder", { method: "POST", body: JSON.stringify({ folder }) }).catch(() => null);
+    const body = await res?.json().catch(() => ({}));
+    if (!res?.ok) toast(body?.error || "Could not change the folder.", "error");
+    loadStatus();
+  };
+  $("sync-folder").addEventListener("click", () => {
+    const form = $("sync-folder-form");
+    form.hidden = !form.hidden;
+    if (!form.hidden) $("sync-folder-path").focus();
+  });
+  $("sync-folder-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = $("sync-folder-path").value.trim();
+    if (!f) return;
+    await setFolder(f);
+    $("sync-folder-form").hidden = true;
+  });
+  $("sync-folder-reset").addEventListener("click", () => setFolder(""));
   const open = (show) => {
     panel.hidden = !show;
     btn.setAttribute("aria-expanded", String(show));
@@ -4325,6 +4383,14 @@ function setupSync() {
     await loadHistory().catch((e) => toast(e.message, "error"));
     toast(body.message, "success");
   });
+  // When the page opens: merge the other device's newer file from the sync folder (an Update does this too)
+  fetch("/api/autosync", { method: "POST", body: "{}" }).then((r) => (r.ok ? r.json() : null)).then(async (r) => {
+    if (r?.imported?.length) {
+      await loadHistory().catch((e) => toast(e.message, "error"));
+      toast(r.imported.join(" "), "success");
+    }
+    if (r?.error) toast(`Sync: ${r.error}`, "error");
+  }).catch(() => {});
 }
 setupSync();
 document.fonts?.ready.then(moveIndicator);

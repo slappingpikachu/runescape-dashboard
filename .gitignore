@@ -3,6 +3,8 @@ dist/
 app/src-tauri/target/
 app/src-tauri/gen/
 app/bundle/
+# Google Cloud OAuth client for Google Drive sync (built into the app; kept out of the public repository)
+app/src-tauri/google-client.json
 
 # Personal settings (created by the setup page)
 settings.json

@@ -66,7 +66,21 @@
         </button>
         <div class="sync-panel card" id="sync-panel" role="dialog" aria-labelledby="sync-title" hidden>
           <strong id="sync-title">Sync With Your Other Device</strong>
-          <p class="muted">Export here, move the file to your other device (AirDrop, USB stick, email), then Import it there. Both devices keep every snapshot; nothing is overwritten.</p>
+          <p class="muted">Automatic: every Update saves this device's history to your Google Drive and merges your other device's. Both keep every snapshot; nothing is overwritten.</p>
+          <p class="sync-auto muted" id="sync-auto"></p>
+          <div class="sync-actions">
+            <button type="button" id="sync-google" class="btn-primary" hidden><span>Connect Google Drive</span></button>
+            <button type="button" id="sync-google-off" class="btn-ghost" hidden><span>Disconnect Google Drive</span></button>
+          </div>
+          <div class="sync-actions">
+            <button type="button" id="sync-folder" class="btn-ghost"><span>Other Folder…</span></button>
+            <button type="button" id="sync-folder-reset" class="btn-ghost" hidden><span>Use Google Drive</span></button>
+          </div>
+          <form class="sync-actions" id="sync-folder-form" hidden>
+            <input type="text" id="sync-folder-path" placeholder="Full path of a folder both computers sync" aria-label="Sync folder path">
+            <button type="submit" class="btn-primary"><span>Use</span></button>
+          </form>
+          <p class="muted small">By hand instead: Export here, move the file to your other device, then Import it there.</p>
           <div class="sync-actions">
             <button type="button" id="sync-export" class="btn-primary"><span>Export</span></button>
             <button type="button" id="sync-import" class="btn-ghost"><span>Import File…</span></button>

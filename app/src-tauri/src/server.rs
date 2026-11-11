@@ -103,8 +103,12 @@ impl Dashboard {
             (false, "/api/refresh") => {
                 let player = self.settings.lock().unwrap().player.clone();
                 let mut last = self.work.lock().unwrap_or_else(|e| e.into_inner());
+                // Automatic sync (sync.rs): the other device's newer file first, so this Refresh builds on it; then
+                // this device's file for the other one
+                crate::sync::auto_import(&self.data_dir(), &player);
                 let (status, body) = refresh::refresh(&self.root, &self.web, &self.icons, &player, &mut last);
                 if status == 200 {
+                    crate::sync::auto_export(&self.data_dir(), &player);
                     data(JSON, self.history())
                 } else {
                     text(status, JSON, body)
@@ -119,7 +123,24 @@ impl Dashboard {
                     text(status, JSON, body)
                 }
             }
-            (true, "/api/sync") => text(200, JSON, crate::sync::status(&self.data_dir())),
+            (true, "/api/sync") => text(200, JSON, crate::sync::status(&self.data_dir(), &self.settings().0)),
+            (false, "/api/autosync") => {
+                let _busy = self.work.lock().unwrap_or_else(|e| e.into_inner());
+                text(200, JSON, crate::util::ps_json(&crate::sync::auto_import(&self.data_dir(), &self.settings().0)))
+            }
+            (false, "/api/google/connect") => {
+                let (status, body) = crate::gdrive::start_connect(&self.data_dir());
+                text(status, JSON, body)
+            }
+            (false, "/api/google/disconnect") => {
+                let (status, body) = crate::gdrive::disconnect(&self.data_dir());
+                text(status, JSON, body)
+            }
+            (false, "/api/sync-folder") => {
+                let _busy = self.work.lock().unwrap_or_else(|e| e.into_inner());
+                let (status, body) = crate::sync::set_folder(&self.data_dir(), req.body());
+                text(status, JSON, body)
+            }
             (false, "/api/export") => {
                 let _busy = self.work.lock().unwrap_or_else(|e| e.into_inner());
                 let (status, body) = crate::sync::export(&self.data_dir(), &self.settings().0);

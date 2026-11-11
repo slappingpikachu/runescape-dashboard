@@ -8,6 +8,7 @@
 mod bank;
 mod cli;
 mod clog;
+mod gdrive;
 mod icons;
 mod layout;
 mod net;

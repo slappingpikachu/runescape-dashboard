@@ -116,6 +116,20 @@ fn check(bundle: &Path, project: &Path) {
     }
 }
 
+// Google Drive sync (src/gdrive.rs): the OAuth "Desktop app" client from Google Cloud, downloaded as
+// google-client.json next to this file (gitignored: the repository is public). Built into the app; without the file
+// the app is built without Google Drive (the Sync panel says so).
+fn google_client(here: &Path) {
+    let f = here.join("google-client.json");
+    println!("cargo:rerun-if-changed=google-client.json");
+    let Ok(t) = fs::read_to_string(&f) else { return };
+    let v: serde_json::Value = serde_json::from_str(t.trim_start_matches('\u{feff}')).unwrap_or_else(|e| panic!("google-client.json: {e}"));
+    let c = v.get("installed").unwrap_or_else(|| panic!("google-client.json: not a Desktop app client (no \"installed\")"));
+    let get = |k: &str| c.get(k).and_then(|x| x.as_str()).unwrap_or_else(|| panic!("google-client.json: no {k}")).to_string();
+    println!("cargo:rustc-env=OSRS_GOOGLE_CLIENT_ID={}", get("client_id"));
+    println!("cargo:rustc-env=OSRS_GOOGLE_CLIENT_SECRET={}", get("client_secret"));
+}
+
 fn main() {
     let here = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let project = here.join("..").join("..");
@@ -136,5 +150,6 @@ fn main() {
         println!("cargo:rerun-if-changed=../../{f}");
     }
     check(&bundle, &project);
+    google_client(&here);
     tauri_build::build()
 }

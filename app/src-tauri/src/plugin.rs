@@ -164,7 +164,15 @@ pub fn update_clog(ctx: &Ctx) -> Res<String> {
     let gap_file = ctx.loot_gap_file();
     if gap_file.exists() {
         let gl: Vec<String> = read_lines(&gap_file).into_iter().filter(|l| !trim(l).is_empty()).collect();
-        for line in gl.iter().skip(gap_n.max(0) as usize) {
+        let mut new: Vec<String> = gl.iter().skip(gap_n.max(0) as usize).map(|l| trim(l).to_string()).collect();
+        // Kills your other device logged (merged in by Sync) are in RuneLite's shared Loot Tracker totals too, so they
+        // look like gaps here; their drops are already in the merged log, so they come off first (sync.rs gap_fixed)
+        let other = crate::sync::loot_other_file(&ctx.data);
+        if !new.is_empty() && other.exists() {
+            let real: Vec<String> = read_lines(&other).into_iter().map(|l| trim(&l).to_string()).filter(|l| l.starts_with(r#"{"t":""#)).collect();
+            new = crate::sync::gap_fixed(&new, &real);
+        }
+        for line in new.iter() {
             let Ok(entry) = serde_json::from_str::<Value>(trim(line)) else { continue };
             if !opt_truthy(prop(&entry, "items")) {
                 continue;
@@ -703,6 +711,12 @@ pub fn update_loot_gaps(ctx: &Ctx) -> Res<String> {
                 continue;
             }
             let miss = ct.kills - o.kills - l.kills;
+            // Old Loot Tracker history arriving late (loaded from the RuneLite account): every kill of this source was
+            // before the last Refresh, so nothing was played now. Taken into the base, no gap (plugin.ps1)
+            if miss > 0 && c.last > 0 && c.last <= t_base.timestamp_millis() {
+                base.insert(key.clone(), ct.clone());
+                continue;
+            }
             let mut ids: IndexSet<String> = ct.drops.keys().cloned().collect();
             ids.extend(o.drops.keys().cloned());
             ids.extend(l.drops.keys().cloned());
