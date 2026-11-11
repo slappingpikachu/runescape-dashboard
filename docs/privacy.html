@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy · OSRS Dashboard</title>
+<meta name="description" content="What OSRS Dashboard does with your data, including Google Drive sync.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="muted">OSRS Dashboard · Effective 11 November 2026</p>
+
+  <p>OSRS Dashboard runs on your own computer. Your game history is stored there, and the app has no server of its
+    own, no account system, no analytics and no advertising. This policy explains what the app reads, what it sends
+    over the internet, and what it does with Google Drive if you choose to connect it.</p>
+
+  <h2>Data stored on your computer</h2>
+  <ul>
+    <li>Your player name and settings.</li>
+    <li>Hiscores snapshots, and the files the OSRS Data Sync RuneLite plugin saves on your computer: skills, quests,
+      diaries, combat achievements, collection log, bank and other item containers, kill counts and drops.</li>
+  </ul>
+  <p>This data stays on your computer unless you use one of the sync options below.</p>
+
+  <h2>What the app downloads</h2>
+  <p>When you press Update, the app downloads your public hiscores from Jagex, and item names, pictures and prices
+    from the Old School RuneScape Wiki. If you choose the one-time import, it also downloads your public history from
+    Wise Old Man. Each request sends only your player name or the item it is about.</p>
+
+  <h2>Google Drive sync (optional)</h2>
+  <p>If you click <strong>Connect Google Drive</strong>, you sign in to Google in your browser and allow the app
+    access with one permission: <code>drive.appdata</code>, "see, create and delete its own configuration data in
+    your Google Drive".</p>
+  <ul>
+    <li><strong>What the app accesses:</strong> only its own hidden application data folder in your Google Drive. It
+      can't see, open or change any of your other Drive files, and it doesn't ask for your name, email address,
+      contacts or anything else in your Google account.</li>
+    <li><strong>What it stores there:</strong> one sync file per computer, holding the game history described above,
+      labelled with your player name, the computer's name and the time it was saved.</li>
+    <li><strong>How it is used:</strong> only to keep your own dashboards on your own computers up to date. The data
+      goes directly between your computer and Google. It is never sent to the app's author or anyone else, and it is
+      not used for advertising, sold or shared.</li>
+    <li><strong>Sign-in token:</strong> Google gives the app a token so it can keep syncing without asking you to sign
+      in again. The token is saved only on that computer, in the app's data folder, and is never put in a sync file.</li>
+    <li><strong>Removing access:</strong> click <strong>Disconnect Google Drive</strong> in the app's Sync panel, which
+      deletes the token and revokes it with Google. You can also remove the app at any time at
+      <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>. To delete the sync
+      files themselves, open Google Drive's Settings, then Manage apps, and choose "Delete hidden app data" for OSRS
+      Dashboard.</li>
+  </ul>
+  <p>OSRS Dashboard's use of information received from Google APIs follows the
+    <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+    including the Limited Use requirements.</p>
+
+  <h2>Sync with a folder or a file</h2>
+  <p>You can also sync by picking a folder that your computers share, or by exporting and importing a file yourself.
+    The app then only reads and writes that folder or file; how it travels is up to you and the service you use.</p>
+
+  <h2>Children</h2>
+  <p>The app doesn't knowingly collect anything from anyone, and it has no accounts of its own.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes, the new version is published on this page with a new effective date. The history of
+    every change is in the project's public source code.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy: open an issue at
+    <a href="https://github.com/slappingpikachu/runescape-dashboard/issues">github.com/slappingpikachu/runescape-dashboard/issues</a>.</p>
+
+  <footer><a href="./">OSRS Dashboard</a> is a fan project and is not affiliated with Jagex or Google.</footer>
+</main>
+</body>
+</html>
