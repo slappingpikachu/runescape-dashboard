@@ -3,7 +3,7 @@
 A standalone Windows and macOS build of the dashboard, made with [Tauri 2](https://tauri.app). It serves the same
 `index.html`, `app.js` and `styles.css` as the PowerShell version, handles the page's requests in Rust
 (`src-tauri/src/server.rs`) and reads and writes the same data files in the same formats. It opens no network
-port.
+port, except for a moment while you connect Google Drive (below).
 
 ## Data location
 
@@ -21,8 +21,32 @@ with `--root <folder>`.
 ## Network access
 
 The app contacts the official hiscores, the OSRS Wiki and its price API, and Wise Old Man (import only), and only
-when you update or import. All other hosts are blocked in `src-tauri/src/net.rs`. JSON export files are read from
+when you update or import. All other hosts are blocked in `src-tauri/src/net.rs`. The one exception is Google Drive
+sync, which is off until you connect it (next section). JSON export files are read from
 `~/.runelite/plugin-data/osrsdatasync/`.
+
+## Google Drive sync
+
+**Sync → Connect Google Drive** (once per computer) opens Google's sign-in page in your browser. Google then sends
+the browser back to a one-time address on this computer (`http://127.0.0.1:<port>`, open only during the sign-in)
+to hand over the access. After that, every Update downloads your other computer's newer sync file, merges it, and
+uploads this computer's file. Opening the app merges too. The files live in the app's own hidden folder in your
+Drive (permission `drive.appdata`): the app can't see your other Drive files. The sign-in is kept in
+`data/sync/google.json` on that computer only. **Disconnect Google Drive** forgets and revokes it. Code:
+`src-tauri/src/gdrive.rs` (Google) and `src-tauri/src/sync.rs` (what is merged). Privacy policy:
+<https://slappingpikachu.github.io/runescape-dashboard/privacy.html>.
+
+The Google sign-in needs an OAuth client ("Desktop app") from Google Cloud. `build.rs` builds it in from
+`src-tauri/google-client.json`, which is gitignored. Without that file the app is built without Google Drive; folder
+sync and Export/Import still work.
+
+## Releases
+
+`.github/workflows/release.yml` builds the release files on GitHub: `OSRS-Dashboard-Setup.exe`,
+`OSRS-Dashboard-Mac.dmg` and `osrs-dashboard.zip`, with Google Drive built in from the repository secret
+`GOOGLE_CLIENT_JSON` (the whole `google-client.json`). To release, set `version` in `src-tauri/tauri.conf.json`,
+then push a tag `v<version>`. GitHub makes a **draft** release with the files; check it and press **Publish**.
+**Run workflow** on the Actions page only builds them, as downloadable artifacts.
 
 ## Building
 

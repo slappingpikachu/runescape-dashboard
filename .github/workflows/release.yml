@@ -1,0 +1,110 @@
+# Builds the release files on GitHub's computers, with Google Drive sign-in built in:
+#   OSRS-Dashboard-Setup.exe (Windows installer), OSRS-Dashboard-Mac.dmg (Apple silicon), osrs-dashboard.zip
+#   (PowerShell version).
+# Push a tag "vX.Y.Z" (the version in app/src-tauri/tauri.conf.json) -> a DRAFT release with those files; check it
+# on the Releases page and press Publish. "Run workflow" on the Actions page (or a change to this file) only builds
+# them, as downloadable artifacts of the run.
+#
+# Repository secret GOOGLE_CLIENT_JSON (Settings > Secrets and variables > Actions) = the whole google-client.json
+# (the Google Cloud "Desktop app" OAuth client; app/src-tauri/build.rs). Without it the apps build without Google
+# Drive, and a tag build stops.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+    branches: ["**"]
+    paths: [".github/workflows/release.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Google Drive client
+        shell: bash
+        env:
+          GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
+        run: |
+          if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf '%s' "$GOOGLE_CLIENT_JSON" > app/src-tauri/google-client.json
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then echo "::error::Secret GOOGLE_CLIENT_JSON is missing"; exit 1
+          else echo "::warning::Secret GOOGLE_CLIENT_JSON is missing: building without Google Drive"; fi
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      - name: Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+      - name: Build the installer
+        working-directory: app/src-tauri
+        run: cargo tauri build --bundles nsis
+      - name: Name the installer
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem app/src-tauri/target/release/bundle/nsis -Filter *-setup.exe | Select-Object -First 1
+          New-Item -ItemType Directory out | Out-Null
+          Copy-Item $exe.FullName out/OSRS-Dashboard-Setup.exe
+      - name: PowerShell version (zip)
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File tools\make-release.ps1
+          Copy-Item dist\osrs-dashboard.zip out\
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: out/*
+          if-no-files-found: error
+
+  mac:
+    runs-on: macos-14   # Apple silicon
+    steps:
+      - uses: actions/checkout@v4
+      - name: Google Drive client
+        env:
+          GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
+        run: |
+          if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf '%s' "$GOOGLE_CLIENT_JSON" > app/src-tauri/google-client.json
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then echo "::error::Secret GOOGLE_CLIENT_JSON is missing"; exit 1
+          else echo "::warning::Secret GOOGLE_CLIENT_JSON is missing: building without Google Drive"; fi
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      - name: Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+      - name: Build the app
+        working-directory: app/src-tauri
+        run: cargo tauri build --bundles app
+      # Tauri's own DMG step drives Finder and can fail; HFS+ keeps the image ~25 MB instead of ~50 MB (app/README.md)
+      - name: Disk image
+        working-directory: app/src-tauri/target/release/bundle
+        run: |
+          mkdir dmg-src && cp -R "macos/OSRS Dashboard.app" dmg-src/ && ln -s /Applications dmg-src/Applications
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          hdiutil create -volname "OSRS Dashboard" -srcfolder dmg-src -fs HFS+ -format UDZO -imagekey zlib-level=9 -ov "$GITHUB_WORKSPACE/out/OSRS-Dashboard-Mac.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Checksums
+        run: cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: ${{ github.ref_name }}
+          files: out/*
