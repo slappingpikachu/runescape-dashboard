@@ -24,6 +24,8 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
+      # Some monster pictures have very long names (wiki text); without this Windows can't check them out
+      - run: git config --global core.longpaths true
       - uses: actions/checkout@v4
       - name: Google Drive client
         shell: bash
