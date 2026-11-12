@@ -32,7 +32,7 @@ jobs:
         env:
           GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
         run: |
-          if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf '%s' "$GOOGLE_CLIENT_JSON" > app/src-tauri/google-client.json
+          if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf '%s' "$GOOGLE_CLIENT_JSON" > app/src-tauri/google-client.json; echo "HAS_GOOGLE=true" >> "$GITHUB_ENV"
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then echo "::error::Secret GOOGLE_CLIENT_JSON is missing"; exit 1
           else echo "::warning::Secret GOOGLE_CLIENT_JSON is missing: building without Google Drive"; fi
       - uses: dtolnay/rust-toolchain@stable
@@ -44,6 +44,10 @@ jobs:
       - name: Build the installer
         working-directory: app/src-tauri
         run: cargo tauri build --bundles nsis
+      - name: Check Google Drive is built in
+        if: env.HAS_GOOGLE == 'true'
+        shell: bash
+        run: grep -q "apps.googleusercontent.com" app/src-tauri/target/release/osrs-dashboard.exe || { echo "::error::Google Drive client not in the app"; exit 1; }
       - name: Name the installer
         shell: pwsh
         run: |
@@ -69,7 +73,7 @@ jobs:
         env:
           GOOGLE_CLIENT_JSON: ${{ secrets.GOOGLE_CLIENT_JSON }}
         run: |
-          if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf '%s' "$GOOGLE_CLIENT_JSON" > app/src-tauri/google-client.json
+          if [ -n "$GOOGLE_CLIENT_JSON" ]; then printf '%s' "$GOOGLE_CLIENT_JSON" > app/src-tauri/google-client.json; echo "HAS_GOOGLE=true" >> "$GITHUB_ENV"
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then echo "::error::Secret GOOGLE_CLIENT_JSON is missing"; exit 1
           else echo "::warning::Secret GOOGLE_CLIENT_JSON is missing: building without Google Drive"; fi
       - uses: dtolnay/rust-toolchain@stable
@@ -81,6 +85,9 @@ jobs:
       - name: Build the app
         working-directory: app/src-tauri
         run: cargo tauri build --bundles app
+      - name: Check Google Drive is built in
+        if: env.HAS_GOOGLE == 'true'
+        run: grep -q "apps.googleusercontent.com" "app/src-tauri/target/release/bundle/macos/OSRS Dashboard.app/Contents/MacOS/osrs-dashboard" || { echo "::error::Google Drive client not in the app"; exit 1; }
       # Tauri's own DMG step drives Finder and can fail; HFS+ keeps the image ~25 MB instead of ~50 MB (app/README.md)
       - name: Disk image
         working-directory: app/src-tauri/target/release/bundle
