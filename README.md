@@ -28,7 +28,8 @@ These links always point to the latest version. Release notes and earlier versio
 - **Quests, diaries and combat achievements**: completion status, requirements, and task lists with each completed
   diary task marked.
 - **Recent activity**: a feed of every update, a 16-week heatmap and streaks.
-- **Sync**: export your history on one computer and import it on another; both keep every snapshot.
+- **Sync**: keep two computers the same automatically through your own Google Drive (desktop app), a shared
+  folder, or by exporting and importing a file; both keep every snapshot.
 
 Every view can be set to any period from one day to all time. Charts and periods follow the game's daily reset
 (00:00 UTC); the activity feed and drop log are grouped by your calendar day.
@@ -95,8 +96,9 @@ Data is only fetched when you select **Update**, at most once per minute.
 | JSON files on your computer | Quests, diaries, combat achievements, collection log, bank, equipment, storage items, Grand Exchange offers, kills and loot |
 | OSRS Wiki | GE prices for items you own or have owned, and names and images for new items |
 | Wise Old Man | The optional one-time history import |
+| Google Drive | Only if you connect it: your sync file, in the app's own hidden folder ([Using two computers](#using-two-computers)) |
 
-No other services are contacted, and nothing is uploaded.
+No other services are contacted. Nothing is uploaded unless you connect Google Drive.
 
 Each update adds a snapshot to `data\history.jsonl`. Snapshots from the last 14 days are kept in full; older
 snapshots are combined into one per game day, which keeps daily gains intact. Update at least once a day for
@@ -105,21 +107,33 @@ accurate daily figures.
 ## Using two computers
 
 If you play on more than one computer (for example a Windows PC and a Mac), select **Sync** next to **Update** to
-keep both dashboards' history the same:
+keep both dashboards' history the same.
+
+**Automatically, with Google Drive (desktop app).** Select **Connect Google Drive** once on each computer and sign
+in to Google in your browser, with the same Google account on both. From then on, every **Update** first merges the
+other computer's newer history, then saves this computer's, and opening the app merges too. No Google Drive app is
+needed. The app can only use its own hidden folder in your Drive; it can't see your other files. Select
+**Disconnect Google Drive** to stop. See the [privacy policy](https://slappingpikachu.github.io/runescape-dashboard/privacy.html).
+
+**Automatically, with a shared folder.** Select **Other Folder…** and enter a folder that both computers keep in
+sync (OneDrive, Dropbox, a network drive). Every **Update** works the same as with Google Drive. This also works in
+the PowerShell version, which finds the Google Drive app's folder by itself.
+
+**By hand.**
 
 1. On the computer you just played on, select **Export**. A `.osrssync` file is saved to your Downloads folder.
 2. Move the file to the other computer (AirDrop, USB stick, or email it to yourself).
 3. On the other computer, select **Sync**, then **Import File…**, and pick the file.
 
-Import merges; it never replaces. Every snapshot from both computers is kept and sorted by time: hiscores, bank,
+A sync merges; it never replaces. Every snapshot from both computers is kept and sorted by time: hiscores, bank,
 quests, diaries, combat achievements, collection log, kill totals and the drop log. Settings, prices and images stay
-per computer. Nothing is uploaded; the file only goes where you move it. The files as they were before an import are
+per computer. The files as they were before an import are
 kept in `data\sync\backup-<time>\` (the newest three).
 
 - Both computers must be set up for the same OSRS name. Log in to the same RuneLite account on both, so RuneLite's
   Loot Tracker totals are shared.
-- Kills you make on one computer appear on the other only after an import. Until then, the other computer may list
-  them as played without the plugin; the import removes those entries again.
+- Kills you make on one computer appear on the other only after a sync. Until then, the other computer may list
+  them as played without the plugin; the sync removes those entries again.
 - After an import, an **Update** skips this computer's RuneLite files when they are older than what the other
   computer sent (RuneLite hasn't run here since), so older quests or an older bank never replace newer ones. Once
   RuneLite runs on this computer again, its files count as usual.
