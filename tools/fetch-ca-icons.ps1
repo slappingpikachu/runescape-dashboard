@@ -1,15 +1,14 @@
 # One-time download of icons for the combat achievement monsters the hiscores don't track (slayer
 # monsters, Galvek, ...). Uses the monster's chathead or picture from the OSRS Wiki, trims it, shrinks it
-# to 24px, adds the white outline and saves icons\ca\<slug>.png (served from disk by server.ps1, embedded
-# in the phone snapshot). Monsters that already have an icon (hiscores bosses + CA_BOSS_ALIAS / CA_ICON_ALIAS in app.js)
-# are skipped, and so are files that already exist. Rerun after tools\fetch-ca.ps1 adds new monsters.
+# to 24px, adds the white outline and saves icons\ca\<slug>.png (served from disk by the app). Monsters that already
+# have an icon (hiscores bosses + CA_BOSS_ALIAS / CA_ICON_ALIAS in app.js) are skipped, and so are files that already exist. Rerun after tools\fetch-ca.ps1 adds new monsters.
 #   powershell -ExecutionPolicy Bypass -File tools\fetch-ca-icons.ps1
 $Root = Split-Path $PSScriptRoot -Parent
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 $UA   = "osrs-progress-dashboard/1.0 (self-hosted OSRS progress dashboard)"
 $Api  = "https://oldschool.runescape.wiki/api.php"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-. (Join-Path $Root "icon-outline.ps1")
+. (Join-Path $PSScriptRoot "icon-outline.ps1")
 function Get-Json([string]$query) {
   (Invoke-WebRequest -Uri "${Api}?$query" -UseBasicParsing -TimeoutSec 30 -UserAgent $UA).Content | ConvertFrom-Json
 }

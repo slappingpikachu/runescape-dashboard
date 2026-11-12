@@ -1,5 +1,5 @@
 # One-time: saves Chart.js and the Inter / Cinzel fonts into .\vendor so the page loads nothing
-# from the internet (server.ps1 serves them from disk). Run again only to replace them.
+# from the internet (the app serves them from disk). Run again only to replace them.
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 $Root   = Split-Path $PSScriptRoot

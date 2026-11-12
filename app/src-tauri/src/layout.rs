@@ -1,7 +1,7 @@
 // Where the app finds the page and where it keeps the data.
 //
 //   pages  index.html, app.js, styles.css, vendor\ (and the shipped pictures in icons\)
-//   root   data\, settings.json, icons\ (pictures downloaded later) - the same layout as the PowerShell version
+//   root   data\, settings.json, icons\ (pictures downloaded later) - one dashboard folder layout
 //
 // In order:
 //   1. --root <folder> or OSRS_DASHBOARD_ROOT: that dashboard folder (the page from it too, if it has one)
@@ -9,8 +9,7 @@
 //      and how the app runs while it is being built)
 //   3. installed: the page from the installer's "dashboard" folder; the data in the user's own app data folder
 //      (Windows %APPDATA%\OSRS Dashboard, Mac ~/Library/Application Support/OSRS Dashboard). A root.txt there holding
-//      a folder path uses that dashboard folder instead (e.g. the one the PowerShell version used; never run both
-//      at once). On the first start the reference lists (collection log layout, task lists...) are copied in.
+//      a folder path uses that dashboard folder instead (e.g. one the former PowerShell version used). On the first start the reference lists (collection log layout, task lists...) are copied in.
 
 use std::fs;
 use std::path::{Path, PathBuf};

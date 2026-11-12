@@ -10,7 +10,7 @@ $Regions = "Ardougne", "Desert", "Falador", "Fremennik", "Kandarin", "Karamja", 
 $Tiers = "Easy", "Medium", "Hard", "Elite"
 
 # Wiki markup -> plain text
-function Clean([string]$s) {
+function Get-CleanText([string]$s) {
   $s = $s -replace '(?s)<ref[^>]*/>', '' -replace '(?s)<ref[^>]*>.*?</ref>', ''
   $s = [regex]::Replace($s, '\{\{SCP\|([^|}]+)\|([^|}]+)[^}]*\}\}', { param($m) "$($m.Groups[2].Value) $($m.Groups[1].Value)" })
   $s = $s -replace '\{\{SCP\|[^}]*\}\}', '' -replace '\{\{NA\|([^}]*)\}\}', '$1'
@@ -66,7 +66,7 @@ foreach ($region in $Regions) {
     if ($tab -match '\[\[Quests/List\|All quests\]\]') { $quests += "All quests" }
     $extra = @()
     $add = [regex]::Match($tab, '(?s)!\s*Additional requirements(.*?)\n\|\}').Groups[1].Value
-    foreach ($line in ($add -split "\n\|-\s*\n")) { $t = Clean ($line -replace '^\s*\|', ''); if ($t) { $extra += $t } }
+    foreach ($line in ($add -split "\n\|-\s*\n")) { $t = Get-CleanText ($line -replace '^\s*\|', ''); if ($t) { $extra += $t } }
 
     # Task table: rows of "N. task" | requirements
     $table = [regex]::Match($w, "(?s)data-diary-tier=""$tier""[^\n]*\n(.*?)\n\|\}").Groups[1].Value
@@ -77,8 +77,8 @@ foreach ($region in $Regions) {
       $text = $cells[0] -replace '^\|\s*\d+\.\s*', ''
       $note = ""
       if ($text -match "(?s)^(.*?)\n''?Note:\s*(.*)$") { $text = $Matches[1]; $note = $Matches[2] }
-      $req = if ($cells.Count -gt 1) { @(($cells[1] -split "\n\*") | ForEach-Object { Clean $_ } | Where-Object { $_ -and $_ -ne "None" }) } else { @() }
-      $tasks += [ordered]@{ task = (Clean $text); note = (Clean $note); req = $req }
+      $req = if ($cells.Count -gt 1) { @(($cells[1] -split "\n\*") | ForEach-Object { Get-CleanText $_ } | Where-Object { $_ -and $_ -ne "None" }) } else { @() }
+      $tasks += [ordered]@{ task = (Get-CleanText $text); note = (Get-CleanText $note); req = $req }
     }
     $tierData[$tier] = [ordered]@{ skills = $skills; noBoost = $noBoost; quests = $quests; extra = $extra; tasks = $tasks }
   }

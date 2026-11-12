@@ -1,6 +1,34 @@
-// JSON export files from RuneLite ("OSRS Data Sync" format, plugin.ps1), turned into the dashboard's
+// JSON export files from RuneLite ("OSRS Data Sync" format), turned into the dashboard's
 // data files on Refresh: quests/diaries/combat achievements, the collection log, bank containers, kill totals,
 // monster pictures, and the drop log's gaps (kills done without the plugin).
+//
+// Plugin files (moved here from plugin.ps1 when the PowerShell version was retired):
+// Data from the "OSRS Data Sync" RuneLite plugin (its files in .runelite\plugin-data\osrsdatasync\<player>).
+// The plugin writes JSON files on this PC; nothing is downloaded. Dot-sourced by server.ps1; needs $Player, $Utf8.
+//
+// ~\.runelite\plugin-data\osrsdatasync\<player>\
+//   progress.json    quests (0 not started, 1 in progress, 2 finished), questPoints, diaries (tier booleans),
+//                    diaryTasks ("1"/"0" per task), ca (task ids), skills
+//   killcounts.json  {"killCounts": {name: count}} from the game's kill count messages (bosses, raids, ...),
+//                    "lootTracker": {type: {name: {kills, first, last}}} every monster/chest/clue with a drop,
+//                    copied from RuneLite's Loot Tracker (first/last in ms since 1970)
+//   clog.json        {"items": {id: qty}, "newByName": {name: time}} (open the log + press Search once)
+//   containers.json  bank (after it was opened), inventory, equipment as [[id, qty]], GE offers
+//   loot.jsonl       one line per kill/reward: {t, source, type, value, items: [[id, qty, gp each]], kc?}
+//
+// GET /api/plugin -> {progress, kills, clog, containers, drops: [loot.jsonl + data\plugin\loot-gaps.jsonl lines],
+//                     killHistory, npcIcons} or null
+//
+// Quest / diary / combat achievement files (moved here from progress.ps1 when the PowerShell version was retired):
+// Quests, achievement diaries and combat achievements for the page. The data comes only from the OSRS Data Sync
+// RuneLite plugin (plugin.ps1 Update-PluginProgress, on Refresh). Dot-sourced by server.ps1; needs $DataDir, $Utf8.
+//
+// data\progress\latest.json    {"v":3,"src":"plugin","timestamp":..,"quests":{name:0|1|2},
+//                               "diaries":{region:{tier:[done|null,total,"1101.."]}},"ca":[finished task ids]}
+//                               (older v2 lines in history.jsonl also have per-task diary flags)
+// data\progress\diary-tasks.json  task text + requirements from the wiki (tools\fetch-diaries.ps1, one-time)
+// data\progress\ca-tasks.json  combat achievement tasks + tier points from the wiki (tools\fetch-ca.ps1, one-time)
+// data\progress\history.jsonl  the same, one line per change (to spot newly finished tasks)
 
 use crate::bank::update_items;
 use crate::clog;

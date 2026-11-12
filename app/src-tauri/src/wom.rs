@@ -1,6 +1,14 @@
-// Optional one-time import of older progress from Wise Old Man into data\history.jsonl (wom.ps1). Only snapshots
+// Optional one-time import of older progress from Wise Old Man into data\history.jsonl. Only snapshots
 // OLDER than the first local snapshot, converted to the official hiscores format and kept only when something
 // changed. A backup of history.jsonl is written first. 50 snapshots per request, 3.5 s apart.
+//
+// Wise Old Man import (moved here from wom.ps1 when the PowerShell version was retired):
+// Optional one-time import of older progress from Wise Old Man (wiseoldman.net) into data\history.jsonl.
+// Used by the dashboard's "Import from Wise Old Man" banner (server.ps1 POST /api/wom) and by tools\import-wom.ps1.
+// Only snapshots OLDER than the first local snapshot are imported, converted to the official hiscores format and
+// de-duplicated (kept only when something changed). A backup of history.jsonl is written first.
+// Wise Old Man is only contacted when the player chooses to import: 50 snapshots per request, 3.5 s apart.
+// Dot-sourced; needs nothing else.
 
 use crate::net::{Web, UA};
 use crate::util::*;

@@ -14,8 +14,7 @@ $DataDir = Join-Path $Root "data"
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 $Player = ""
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-. (Join-Path $Root "clog.ps1")   # Get-Web, $WikiApi, $ClogDir, Save-ClogFile, ConvertTo-Hash
-. (Join-Path $Root "bank.ps1")   # Update-BankItems, Read-BankHash: wiki item names by id
+. (Join-Path $PSScriptRoot "wiki-lib.ps1")   # Get-Web, $WikiApi, Save-ClogFile, ConvertTo-Hash, Update-BankItems, Read-BankHash
 $ErrorActionPreference = "Stop"
 
 # Log page links whose item the wiki lists under another name

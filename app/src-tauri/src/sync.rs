@@ -1,9 +1,37 @@
-// Export / Import between your own devices (sync.ps1: what is merged and why is described there). The same files and
-// the same results as the PowerShell version; tools\parity-test.ps1 can compare the two.
+// Export / Import and automatic sync between your own devices (what is merged and why: below).
 //
 //   POST /api/export  one file in Downloads with this device's history (for Import on the other device)
 //   POST /api/import  body = such a file from another device, merged into this device's data
 //   GET  /api/sync    {"device","exported","imported"} for the page
+//
+// What is merged and why (moved here from sync.ps1 when the PowerShell version was retired):
+// Export / Import between your own devices (e.g. a Windows PC and a Mac), so both dashboards hold the same history.
+// Export writes one file to your Downloads folder; move it to the other device any way you like (AirDrop, USB stick,
+// email to yourself) and Import it there. Nothing goes over the network. Dot-sourced by server.ps1 after plugin.ps1.
+//
+// Import MERGES: every history keeps the snapshots of both devices (the same snapshot twice = once), sorted by time.
+//   history.jsonl, bank\history.jsonl, bank\prices-saves.jsonl, plugin\kills-history.jsonl   one line per time "t"
+//   progress\history.jsonl   + latest.json when the other device's newest progress is newer
+//   clog\history.jsonl       from the other device's first line on, each line holds every item either device had by
+//                            then (highest count, earliest date); the last line keeps THIS device's lootT/gapN markers
+//   bank\history.jsonl       a line whose bank was seen before an earlier line's bank (the device hadn't opened the
+//                            bank since) gets that newer bank, so the value graph doesn't dip back to an old bank
+//   loot                     the other device's loot.jsonl -> data\plugin\loot-other.jsonl (the plugin's own file is
+//                            never written). Drop log gaps (loot-gaps.jsonl) stay per device: with RuneLite's synced
+//                            Loot Tracker, kills made on the other device look like "played without the plugin" here,
+//                            so a gap is reduced by the other device's real drops in its window (Get-SyncDrops).
+//                            The other device's gaps from before this device's drop log began -> gaps-other.jsonl.
+// Settings (player name, Wise Old Man answer), prices and pictures stay per device.
+//
+// The file: line 1 {"osrsDashboardSync":1,"player","device":{"id","name"},"exported","seen":{..}}, then for each part
+// a line {"section":"<name>"} followed by that file's lines as they are (every part is JSON lines; no line starts
+// with {"section").
+//
+// data\sync\state.json  {"id","name","seen":{"progress","killcounts","containers","bankAt"},"exported","imported"}
+//   seen = the newest plugin files ("updated" times, bank time) of any device merged in. A Refresh skips a plugin file
+//   older than that (RuneLite hasn't run on this device since), so old quests / bank / kill totals from here never
+//   become the newest snapshot. Once RuneLite runs here again, its files are newer and count as usual.
+// data\sync\backup-<time>\  the files as they were before an import (the newest 3 are kept)
 
 use crate::refresh::{home_dir, plugin_dir};
 use crate::util::*;

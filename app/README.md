@@ -1,9 +1,9 @@
-# OSRS Dashboard desktop app
+# OSRS Dashboard app
 
-A standalone Windows and macOS build of the dashboard, made with [Tauri 2](https://tauri.app). It serves the same
-`index.html`, `app.js` and `styles.css` as the PowerShell version, handles the page's requests in Rust
-(`src-tauri/src/server.rs`) and reads and writes the same data files in the same formats. It opens no network
-port, except for a moment while you connect Google Drive (below).
+The dashboard for Windows and macOS, made with [Tauri 2](https://tauri.app). It shows the page in `index.html`,
+`app.js` and `styles.css`, and handles the page's requests in Rust (`src-tauri/src/server.rs`): updates, data files,
+sync and Google Drive. The data files keep the format of the former PowerShell version, so its data folders work as
+they are. It opens no network port, except for a moment while you connect Google Drive (below).
 
 ## Data location
 
@@ -42,8 +42,8 @@ sync and Export/Import still work.
 
 ## Releases
 
-`.github/workflows/release.yml` builds the release files on GitHub: `OSRS-Dashboard-Setup.exe`,
-`OSRS-Dashboard-Mac.dmg` and `osrs-dashboard.zip`, with Google Drive built in from the repository secret
+`.github/workflows/release.yml` builds the release files on GitHub: `OSRS-Dashboard-Setup.exe` and
+`OSRS-Dashboard-Mac.dmg`, with Google Drive built in from the repository secret
 `GOOGLE_CLIENT_JSON` (the whole `google-client.json`). To release, set `version` in `src-tauri/tauri.conf.json`,
 then push a tag `v<version>`. GitHub makes a **draft** release with the files; check it and press **Publish**.
 **Run workflow** on the Actions page only builds them, as downloadable artifacts.
@@ -76,7 +76,7 @@ hdiutil create -volname "OSRS Dashboard" -srcfolder dmg-src -fs HFS+ -format UDZ
 The macOS build runs on Apple silicon only (M1 and newer).
 
 Before compiling, `build.rs` copies the page, fonts, chart library, images and reference lists into
-`app/bundle/dashboard/` using the same allow-list as `tools/make-release.ps1`. The build fails if it finds personal
+`app/bundle/dashboard/` from an allow-list. The build fails if it finds personal
 data (history, bank, prices, settings, the builder's player name or user folder).
 
 Builds are not code-signed. Windows SmartScreen and macOS Gatekeeper show a warning on first launch:
@@ -88,11 +88,13 @@ Builds are not code-signed. Windows SmartScreen and macOS Gatekeeper show a warn
 ## Tests
 
 ```
-cargo test                                                                        # in app/src-tauri
-powershell -ExecutionPolicy Bypass -File tools\test-plugin-files.ps1 -Impl app    # plugin file handling
-powershell -ExecutionPolicy Bypass -File tools\parity-test.ps1 -Fresh -Wom        # app vs. PowerShell
+cargo test                                                        # in app/src-tauri
+python3 tools/sync-test.py app/src-tauri/target/release/osrs-dashboard synced
+AUTO=1 python3 tools/sync-test.py app/src-tauri/target/release/osrs-dashboard synced   # through a folder, real Updates
 ```
 
-`parity-test.ps1` runs both versions on copies of your data and compares every file they write. It covers every
-page request, two refreshes, a first run on an empty install and the Wise Old Man import. The app's downloads are
-recorded and replayed to the PowerShell version, so both see identical responses at the same fixed time.
+`tools/sync-test.py` runs two "computers" on copies of your data folder (your real data is only read): each plays on
+a different day, then they sync. It checks that both end up with the same history, the collection log counts each
+drop once, no false "played without the plugin" entries appear, a second import changes nothing, and an Update
+afterwards keeps the newer data. Use `unsynced` instead of `synced` for two RuneLites that don't share Loot Tracker
+totals. `--root` and `--plugin` pick other folders to copy.

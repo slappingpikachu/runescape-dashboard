@@ -1,4 +1,4 @@
-// Refresh (server.ps1 Invoke-Refresh), first-start setup and the Wise Old Man offer.
+// Refresh, first-start setup and the Wise Old Man offer.
 // A Refresh downloads the official hiscores (and the GE prices) at the same time, saves the snapshot to
 // data\history.jsonl, merges older days into daily snapshots, then turns the plugin's files into the dashboard's data.
 

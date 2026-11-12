@@ -1,9 +1,9 @@
-// OSRS progress dashboard. Data comes from the official hiscores via server.ps1,
+// OSRS progress dashboard. Data comes from the official hiscores via the app (server.rs),
 // which only contacts the hiscores when "Update" is pressed.
 // Each refresh is stored as a snapshot; gains = latest snapshot minus the
 // snapshot in effect at the start of the selected period.
 
-const WIKI = "/icons/wiki/"; // icons are cached locally by server.ps1
+const WIKI = "/icons/wiki/"; // icons are cached locally by the app
 // Main words capitalised everywhere on the dashboard: "Tormented demon" -> "Tormented Demon".
 // Small joining words stay lower case after the first word; tags like "(i)" and "(u)" are left alone.
 const TITLE_SMALL = /^(of|the|and|in|at|to|a|an|on|for|or|by|vs|per|from|with)$/i;
@@ -69,7 +69,7 @@ const fmtDate = (d, opts) => {
   return f.format(d);
 };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-// The phone snapshot (toolsbuild-snapshot.ps1) embeds the icons; icon() swaps the path for it
+// The phone snapshot embeds the icons; icon() swaps the path for it
 const icon = (path) => window.SNAPSHOT_ICONS?.[path] ?? path;
 const wikiIcon = (file) => icon(WIKI + file);
 const skillIcon = (name) => (name === "Overall" ? wikiIcon("Stats_icon.png") : icon(`/icons/skill/${name}.png`));
@@ -1961,7 +1961,7 @@ $("ca-card").addEventListener("input", (e) => {
 
 // ---------- bank (OSRS Data Sync plugin) ----------
 // The plugin saves your bank, gear and inventory whenever they change in game. The server reads its file
-// on Refresh (bank.ps1) and keeps a line per change. Value = quantity × today's GE price.
+// on Refresh (bank.rs) and keeps a line per change. Value = quantity × today's GE price.
 
 const bankName = (id) => titled(state.bank?.names[id]?.[0] || itemName(id));
 // Items inside other items and in other storage ("stored" in a bank save: {key: [[id, qty], ..]}) as one list
@@ -1971,7 +1971,7 @@ const bankTier = (id) => VALUE_TIERS.find(([min]) => bankPrice(id) >= min)?.[1] 
 
 function setBank(raw) {
   if (!raw?.history?.length) { state.bank = null; return; }
-  // worn / carried: equipment + inventory (bank.ps1). They count toward the value so taking gear out of
+  // worn / carried: equipment + inventory (bank.rs). They count toward the value so taking gear out of
   // the bank to wear it isn't a loss. The oldest lines have neither.
   // Kind of each saved line: "plugin", "gear" (an older save that knew the gear, but whose bank copy could be
   // a little older than the gear) or "bank" (an older save with the bank only). The keys are the tags those
@@ -2089,7 +2089,7 @@ function setBank(raw) {
   estimatePouch(lines);
   // Today's saves and the current value use the live prices of the last Refresh; older saves are snapshots at the
   // prices of the moment they were saved (otherwise the in-game value can sit millions above the once-a-day
-  // prices): bank.ps1 prices-saves.jsonl, else that day's prices-days.json (ids missing there: the day's table).
+  // prices): bank.rs prices-saves.jsonl, else that day's prices-days.json (ids missing there: the day's table).
   const live = raw.live?.prices ?? null, nowDay = (raw.live?.t ?? raw.prices?.t ?? "").slice(0, 10);
   const saves = new Map((raw.saves ?? []).map((s) => [s.t, s.prices]));
   const tables = new Map(), cache = new Map();
@@ -2140,7 +2140,7 @@ function estimatePouch(lines) {
   for (const l of lines) l.pouch = l.pouchSaved ? l.pouchSaved.filter(([, q]) => q > 0) : [];
 }
 
-// What one item is worth: its GE price, or else what it's made from (bank.ps1 explains the sources):
+// What one item is worth: its GE price, or else what it's made from (bank.rs explains the sources):
 // RuneLite's own untradeable list (Bow of faerdhinen -> the inactive bow, Purging staff -> Tormented
 // synapse; several entries add up), then doses/charges, then the cheapest wiki recipe of tradeable parts.
 // Recipe values under 1K are ignored (wool, buckets of water: not what people mean by "worth something").
@@ -2191,7 +2191,7 @@ function bankTile([id, q], cls = "") {
 }
 
 // Worn items laid out like the game's equipment tab, carried items like its 4×7 inventory.
-// Slots come from the wiki (bank.ps1 Update-BankSlots); a 2h weapon goes in the weapon slot.
+// Slots come from the wiki (bank.rs); a 2h weapon goes in the weapon slot.
 const EQUIP_SLOTS = ["head", "cape", "neck", "ammo", "weapon", "body", "shield", "legs", "hands", "feet", "ring"];
 function bankKitHtml(worn, carried) {
   const b = state.bank, bySlot = new Map(), loose = [];
@@ -2442,7 +2442,7 @@ function bankChangesHtml() {
 
 // Price moves for the selected period, so volatile items stand out.
 // Everything you own now (bank + worn + carried + the estimates) valued at the GE prices of the last Refresh
-// (bank.ps1 prices-live.json) against the period's start: Today = the hour before the daily reset
+// (bank.rs prices-live.json) against the period's start: Today = the hour before the daily reset
 // (prices-reset.json), other periods = the 24h average of the day before the period starts (prices-past.json,
 // downloaded once per day on Refresh). Split into what's gaining and what's losing you money, biggest first.
 // Untradeables move with the parts they're valued by (Bow of faerdhinen = the inactive bow).
@@ -3438,7 +3438,7 @@ function renderChart(c) {
     // vendor\chart.umd.min.js didn't load: almost always a server started before it was added
     $("chart-empty").hidden = false;
     $("xp-chart").parentElement.hidden = true;
-    $("chart-empty").innerHTML = `<p>The chart couldn't load.</p><p class="muted small">Close the server window and run <strong>start.bat</strong> again, then reload.</p>`;
+    $("chart-empty").innerHTML = `<p>The chart couldn't load.</p><p class="muted small">Close OSRS Dashboard and open it again.</p>`;
     return;
   }
 
@@ -4176,8 +4176,8 @@ if (window.SNAPSHOT) {
   setHistory(window.SNAPSHOT);
 } else if (location.protocol === "file:") {
   $("empty").hidden = false;
-  $("empty-title").textContent = "Start the dashboard with start.bat";
-  $("empty-text").textContent = "Double-click start.bat (not index.html) so the dashboard can reach the hiscores.";
+  $("empty-title").textContent = "Open the OSRS Dashboard app";
+  $("empty-text").textContent = "This page only works inside the OSRS Dashboard app, not opened as a file.";
   $("refresh-btn").disabled = true;
 } else {
   // Player name from the server's settings.json. No name yet (first start): the setup card asks for it.
@@ -4231,7 +4231,7 @@ $("setup").addEventListener("submit", async (e) => {
     $("wom-offer").hidden = !useWom;
     answerWom(useWom); // runs on while the dashboard shows; if it fails the banner stays to try again
   } catch {
-    fail("Could not reach the dashboard server. Is start.bat still running?");
+    fail("Something went wrong. Close OSRS Dashboard, open it again and try once more.");
   } finally {
     btn.disabled = false; btn.classList.remove("loading");
     btn.querySelector("span").textContent = "Continue";
@@ -4270,7 +4270,7 @@ async function answerWom(doImport) {
 $("wom-import").addEventListener("click", () => answerWom(true));
 $("wom-skip").addEventListener("click", () => answerWom(false));
 
-// ---- Sync with your other device (server sync.ps1 / sync.rs) ----
+// ---- Sync with your other device (sync.rs) ----
 // Export saves one file to Downloads; Import merges such a file made on the other device (every snapshot of both is
 // kept; nothing is overwritten), then the page reloads its data. Only with a server: the phone snapshot and a page
 // opened as a file have no Sync button.

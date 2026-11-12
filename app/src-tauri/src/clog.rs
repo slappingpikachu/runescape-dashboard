@@ -1,5 +1,19 @@
-// Collection log helpers (clog.ps1): every log item id, GE prices of the items you've obtained, wiki image files.
+// Collection log helpers: every log item id, GE prices of the items you've obtained, wiki image files.
 // data\clog\history.jsonl itself is written by plugin.rs (Update-PluginClog).
+//
+// Collection log files (moved here from clog.ps1 when the PowerShell version was retired):
+// Collection log for the page. The items come only from the OSRS Data Sync RuneLite plugin
+// (plugin.ps1 Update-PluginClog, on Refresh); no other plugin or site is used. Names, pictures and GE prices come
+// from the OSRS Wiki.
+// Dot-sourced by server.ps1; needs $DataDir, $Root, $Player, $Utf8 and Add-IconOutline.
+//
+// data\clog\history.jsonl   one line per change (new item or a higher count):
+//                           {"t":ISO,"changed":"yyyy-MM-dd HH:mm:ss","total":n,"available":n,"src":"plugin",
+//                            "items":{"<id>":[count,"<date first seen>"],...}}  (lines without src: saved Oct 24 - Nov 1, before the plugin)
+// data\clog\items.json      id -> item name (OSRS Wiki, tools\fetch-clog-layout.ps1; new ids get their name from the wiki)
+// data\clog\categories.json {"names":{page:"Page name"}, tab:{page:[ids]}} in collection log order (OSRS Wiki,
+//                           tools\fetch-clog-layout.ps1; run it again when Jagex adds log items)
+// data\clog\images.json     id -> OSRS Wiki image file, for icons\item\<id>.png
 
 use crate::refresh::Ctx;
 use crate::util::*;

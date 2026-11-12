@@ -1,6 +1,7 @@
-// OSRS Dashboard desktop app (Tauri). The window shows the same page as the PowerShell version (index.html, app.js,
-// styles.css); every request it makes ("/api/history", "/icons/...") is answered by server.rs through the app's own
-// "dash" protocol, so there is no network port and no console window. Where the page and the data are: layout.rs.
+// OSRS Dashboard desktop app (Tauri). The window shows the dashboard page (index.html, app.js, styles.css); every
+// request it makes ("/api/history", "/icons/...") is answered by server.rs through the app's own "dash" protocol, so
+// there is no network port (except briefly while connecting Google Drive, gdrive.rs) and no console window.
+// Where the page and the data are: layout.rs.
 //
 // Without a window (tests, tools): see cli.rs.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]

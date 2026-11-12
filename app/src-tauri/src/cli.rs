@@ -1,4 +1,4 @@
-// Command-line use without a window, for the tests in tools\ (parity-test.ps1, test-plugin-files.ps1 -Impl app):
+// Command-line use without a window, for tests and scripts:
 //   --root <folder> --cli GET|POST <path> [body|@file] [--out <file>]   one request; answer to stdout (or the file)
 //   --root <folder> --step progress|lootgaps|clog|bank|kills [time]  one Refresh step; its message to stdout
 //   --plugin-dir <player>                                          the plugin folder used for that player

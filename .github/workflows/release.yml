@@ -1,6 +1,5 @@
 # Builds the release files on GitHub's computers, with Google Drive sign-in built in:
-#   OSRS-Dashboard-Setup.exe (Windows installer), OSRS-Dashboard-Mac.dmg (Apple silicon), osrs-dashboard.zip
-#   (PowerShell version).
+#   OSRS-Dashboard-Setup.exe (Windows installer) and OSRS-Dashboard-Mac.dmg (Apple silicon).
 # Push a tag "vX.Y.Z" (the version in app/src-tauri/tauri.conf.json) -> a DRAFT release with those files; check it
 # on the Releases page and press Publish. "Run workflow" on the Actions page (or a change to this file) only builds
 # them, as downloadable artifacts of the run.
@@ -54,11 +53,6 @@ jobs:
           $exe = Get-ChildItem app/src-tauri/target/release/bundle/nsis -Filter *-setup.exe | Select-Object -First 1
           New-Item -ItemType Directory out | Out-Null
           Copy-Item $exe.FullName out/OSRS-Dashboard-Setup.exe
-      - name: PowerShell version (zip)
-        shell: powershell
-        run: |
-          powershell -ExecutionPolicy Bypass -File tools\make-release.ps1
-          Copy-Item dist\osrs-dashboard.zip out\
       - uses: actions/upload-artifact@v4
         with:
           name: windows

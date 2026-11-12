@@ -1,4 +1,5 @@
-// Small helpers that make Rust behave like the PowerShell 5.1 scripts it replaces, so both write the same files:
+// Small helpers that keep the data files exactly as the former PowerShell 5.1 version wrote them (existing data stays
+// readable, and the page relies on the exact JSON):
 // reading text like [IO.File]::ReadAllText / ReadAllLines, JSON written like ConvertTo-Json -Compress (same escapes:
 // ' < > & become \u0027 \u003c \u003e \u0026), times like .NET's "o" format, and PowerShell's idea of "true"/"empty".
 

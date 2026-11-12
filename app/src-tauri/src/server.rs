@@ -1,6 +1,5 @@
-// Answers the page's requests, the same way server.ps1 (+ clog.ps1, bank.ps1, progress.ps1, plugin.ps1) does.
-// Every answer is built exactly like the PowerShell version builds it (same JSON text), so the page can't tell the
-// difference; tools\parity-test.ps1 compares the two.
+// Answers the page's requests. The JSON text keeps the exact shape the former PowerShell version sent (the page
+// relies on it).
 //
 // Refresh, setup and the Wise Old Man import are in refresh.rs; a picture that isn't saved yet is downloaded from the
 // OSRS Wiki once (icons.rs). One Refresh / setup / import runs at a time.

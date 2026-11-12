@@ -1,6 +1,6 @@
 [package]
 name = "osrs-dashboard"
-version = "0.4.1"
+version = "0.4.2"
 description = "OSRS Dashboard: your Old School RuneScape progress, on your own PC"
 edition = "2021"
 publish = false

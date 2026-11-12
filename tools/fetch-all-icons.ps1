@@ -49,7 +49,7 @@ Write-Host "Reading the wiki's monster and NPC lists..."
 $mapFile = Join-Path $Root "data\plugin\npc-images.json"
 $map = @{}
 if (Test-Path $mapFile) { foreach ($p in ([IO.File]::ReadAllText($mapFile, $Utf8) | ConvertFrom-Json).PSObject.Properties) { $map[$p.Name] = [string]$p.Value } }
-$best = @{}   # name -> file (the plain "<name>.png" picture wins, like plugin.ps1 Update-NpcIcons)
+$best = @{}   # name -> file (the plain "<name>.png" picture wins, like the app's monster pictures (plugin.rs))
 # Only NPCs the dashboard can show: every monster (can be killed) + NPCs you can pickpocket
 # (the "Thievable NPCs" table on the wiki's Thieving page). Talk-only NPCs are skipped.
 $thieving = (Invoke-WebRequest -UseBasicParsing -UserAgent $UA -TimeoutSec 60 -Uri "https://oldschool.runescape.wiki/w/Thieving?action=raw").Content
@@ -117,7 +117,7 @@ $worker = {
   return $null
 }
 $pool = [RunspaceFactory]::CreateRunspacePool(1, $Workers); $pool.Open()
-$outline = Join-Path $Root "icon-outline.ps1"
+$outline = Join-Path $PSScriptRoot "icon-outline.ps1"
 $running = New-Object System.Collections.ArrayList
 $done = 0; $problems = New-Object System.Collections.ArrayList
 $queue = New-Object System.Collections.Queue (, $list)

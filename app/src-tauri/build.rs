@@ -1,8 +1,8 @@
 // Before Tauri's own build step: gathers what the installer ships into app\bundle\dashboard (tauri.conf.json
-// "resources"). The same allow-list as tools\make-release.ps1: the page, fonts + chart library, the saved pictures and
-// the reference lists every player needs. NEVER anyone's data (history, bank, collection log, kills, prices,
+// "resources"). An allow-list: the page, fonts + chart library, the saved pictures and the reference lists every
+// player needs. NEVER anyone's data (history, bank, collection log, kills, prices,
 // settings): only allow-listed files are copied, and the build stops if a personal file or the builder's player name
-// / user folder turns up in the copy anyway. Works the same on Windows and Mac (no PowerShell needed).
+// / user folder turns up in the copy anyway. Works the same on Windows and Mac.
 
 use std::fs;
 use std::path::{Path, PathBuf};

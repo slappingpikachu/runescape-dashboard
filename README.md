@@ -1,8 +1,8 @@
 # OSRS Progress Dashboard
 
-A self-hosted progress dashboard for your own Old School RuneScape account. It combines the official hiscores with
-JSON files exported from RuneLite on your computer, turns them into readable charts and lists, and keeps the full
-history locally.
+A progress dashboard app for your own Old School RuneScape account, for Windows and Mac. It combines the official
+hiscores with JSON files exported from RuneLite on your computer, turns them into readable charts and lists, and keeps
+the full history on your computer.
 
 ![Dashboard overview](docs/dashboard.png)
 
@@ -12,7 +12,6 @@ history locally.
 | --- | --- | --- |
 | Desktop app installer | Windows 10/11 | [OSRS-Dashboard-Setup.exe](https://github.com/slappingpikachu/runescape-dashboard/releases/latest/download/OSRS-Dashboard-Setup.exe) |
 | Desktop app disk image | macOS 11 or later, Apple silicon (M1 and newer) | [OSRS-Dashboard-Mac.dmg](https://github.com/slappingpikachu/runescape-dashboard/releases/latest/download/OSRS-Dashboard-Mac.dmg) |
-| Dashboard (PowerShell) | Windows, macOS | [osrs-dashboard.zip](https://github.com/slappingpikachu/runescape-dashboard/releases/latest/download/osrs-dashboard.zip) |
 
 These links always point to the latest version. Release notes and earlier versions are on the
 [Releases](https://github.com/slappingpikachu/runescape-dashboard/releases) page.
@@ -28,36 +27,21 @@ These links always point to the latest version. Release notes and earlier versio
 - **Quests, diaries and combat achievements**: completion status, requirements, and task lists with each completed
   diary task marked.
 - **Recent activity**: a feed of every update, a 16-week heatmap and streaks.
-- **Sync**: keep two computers the same automatically through your own Google Drive (desktop app), a shared
-  folder, or by exporting and importing a file; both keep every snapshot.
+- **Sync**: keep two computers the same automatically through your own Google Drive, a shared folder, or by
+  exporting and importing a file; both keep every snapshot.
 
 Every view can be set to any period from one day to all time. Charts and periods follow the game's daily reset
 (00:00 UTC); the activity feed and drop log are grouped by your calendar day.
 
 ## Requirements
 
-- Windows 10 or 11, or macOS 11 or later. The desktop app for Mac needs Apple silicon (M1 and newer); the
-  PowerShell version on a Mac needs PowerShell 7 (`brew install powershell`).
+- Windows 10 or 11, or macOS 11 or later on Apple silicon (M1 and newer).
 - For bank, collection log, quests, diaries, combat achievements, kills and loot: RuneLite exporting JSON files to
   `.runelite/plugin-data/osrsdatasync/<player>/`. This is the format of the OSRS Data Sync plugin on RuneLite's
   Plugin Hub. Keep RuneLite's built-in **Loot Tracker** plugin enabled for kills and loot. Without these files, the
   dashboard shows hiscores data only.
 
 ## Installation
-
-### Windows
-
-1. Extract [osrs-dashboard.zip](#download) to any folder, for example `Documents\osrs-dashboard`.
-2. Run `start.bat`. The dashboard opens at http://localhost:8765/. The server runs in the console window that
-   opens; closing it stops the dashboard.
-
-### macOS
-
-Run `pwsh server.ps1` in the dashboard folder, then open http://localhost:8765/.
-
-### Desktop app (Windows and Mac)
-
-The same dashboard is available as a standalone app that needs no console window or browser.
 
 - **Windows:** run [OSRS-Dashboard-Setup.exe](#download); it installs without administrator rights. The app is not
   code-signed, so on first launch Windows SmartScreen shows a warning: select **More info**, then **Run anyway**.
@@ -70,10 +54,9 @@ The same dashboard is available as a standalone app that needs no console window
 | --- | --- | --- |
 | Data | `%APPDATA%\OSRS Dashboard\` | `~/Library/Application Support/OSRS Dashboard/` |
 
-- To use an existing dashboard folder instead, create a file named `root.txt` in the data folder containing that
-  folder's path.
-- Do not run the app and the PowerShell version (`start.bat` or `pwsh server.ps1`) on the same folder at the same
-  time.
+- To use an existing dashboard folder instead (for example one from the former PowerShell version), create a file
+  named `root.txt` in the data folder containing that folder's path.
+- To update, install the new version over the old one. Your data stays.
 - To move your history to a second computer, or keep two computers the same, use [Sync](#using-two-computers).
 
 Build instructions for Windows and macOS are in [app/README.md](app/README.md).
@@ -83,7 +66,7 @@ Build instructions for Windows and macOS are in [app/README.md](app/README.md).
 1. Enter your OSRS name. The dashboard verifies it on the hiscores, saves it to `settings.json` and takes the first
    snapshot.
 2. With **Import Wise Old Man History** ticked, your earlier history is imported once if your account is tracked
-   there. This can also be run later with `tools\import-wom.ps1`.
+   there.
 3. In RuneLite, log in, open your bank once, then open the collection log and select **Search** once, so the JSON
    files include everything.
 4. Select **Update** on the dashboard.
@@ -111,15 +94,14 @@ accurate daily figures.
 If you play on more than one computer (for example a Windows PC and a Mac), select **Sync** next to **Update** to
 keep both dashboards' history the same.
 
-**Automatically, with Google Drive (desktop app).** Select **Connect Google Drive** once on each computer and sign
+**Automatically, with Google Drive.** Select **Connect Google Drive** once on each computer and sign
 in to Google in your browser, with the same Google account on both. From then on, every **Update** first merges the
 other computer's newer history, then saves this computer's, and opening the app merges too. No Google Drive app is
 needed. The app can only use its own hidden folder in your Drive; it can't see your other files. Select
 **Disconnect Google Drive** to stop. See the [privacy policy](https://slappingpikachu.github.io/runescape-dashboard/privacy.html).
 
 **Automatically, with a shared folder.** Select **Other Folder…** and enter a folder that both computers keep in
-sync (OneDrive, Dropbox, a network drive). Every **Update** works the same as with Google Drive. This also works in
-the PowerShell version, which finds the Google Drive app's folder by itself.
+sync (OneDrive, Dropbox, a network drive). Every **Update** works the same as with Google Drive.
 
 **By hand.**
 
@@ -130,8 +112,8 @@ the PowerShell version, which finds the Google Drive app's folder by itself.
 A sync merges; it never replaces. Every snapshot from both computers is kept and sorted by time: hiscores, bank,
 quests, diaries, combat achievements, collection log, kill totals and the drop log. RuneLite's current files (Kills
 & loot, Grand Exchange offers, storage items) come along too, and each computer shows the newer ones, so a computer
-you don't play on stays up to date. Settings, prices and images stay per computer. The files as they were before an import are
-kept in `data\sync\backup-<time>\` (the newest three).
+you don't play on stays up to date. Settings, prices and images stay per computer. The files as they were before an
+import are kept in `data\sync\backup-<time>\` (the newest three).
 
 - Both computers must be set up for the same OSRS name. Log in to the same RuneLite account on both, so RuneLite's
   Loot Tracker totals are shared.
@@ -141,13 +123,9 @@ kept in `data\sync\backup-<time>\` (the newest three).
   computer sent (RuneLite hasn't run here since), so older quests or an older bank never replace newer ones. Once
   RuneLite runs on this computer again, its files count as usual.
 
-## Phone access
-
-To open the dashboard from a phone on the same network, run `enable-phone-access.bat` once as administrator. The
-server window then shows the address to use. Run `tools\enable-phone-access.ps1 -Undo` as administrator to remove
-access.
-
 ## Data files
+
+All in the app's data folder ([Installation](#installation)).
 
 | Path | Contents |
 | --- | --- |
@@ -160,37 +138,30 @@ access.
 | `data\sync\` | This computer's sync state and backups from before each import |
 | `icons\` | Item, boss and monster images from the OSRS Wiki |
 
-Back up the `data` folder to keep your history. Use a separate copy of the dashboard for each account.
-
-## Configuration
-
-The port (8765) and the update cooldown (60 seconds) are set at the top of `server.ps1`.
+Back up the `data` folder to keep your history.
 
 ## Maintenance tools
 
-These rebuild reference data from the OSRS Wiki when new content is released. Run them with
-`powershell -ExecutionPolicy Bypass -File tools\<name>.ps1`.
+These rebuild the reference lists in this repository from the OSRS Wiki when new content is released (developers
+only; the app doesn't need them). Run them from the repository folder with
+`powershell -ExecutionPolicy Bypass -File tools\<name>.ps1` on Windows, or `pwsh tools/<name>.ps1` on a Mac
+(`brew install powershell`).
 
 | Tool | Purpose |
 | --- | --- |
 | `fetch-clog-layout.ps1` | Collection log tabs, pages and items |
 | `fetch-ca.ps1`, `fetch-ca-icons.ps1` | Combat achievement tasks and monster images |
 | `fetch-diaries.ps1` | Achievement diary tasks and requirements |
+| `fetch-quests.ps1` | Quest requirements |
 | `fetch-all-icons.ps1` | All item, monster and NPC images (resumable) |
-| `import-wom.ps1` | Wise Old Man history import |
 
 ## Development
 
 | Path | Contents |
 | --- | --- |
-| `server.ps1` | Local web server and update pipeline |
-| `plugin.ps1`, `bank.ps1`, `clog.ps1`, `progress.ps1`, `wom.ps1`, `sync.ps1`, `icon-outline.ps1` | Data processing |
-| `index.html`, `styles.css`, `app.js`, `vendor\` | Web interface |
-| `app\` | Desktop app (Tauri and Rust) |
-| `tools\` | Maintenance, release and test scripts |
+| `index.html`, `styles.css`, `app.js`, `vendor\` | The dashboard page |
+| `app\` | The app (Tauri and Rust): data processing, sync, Google Drive. Build and release: [app/README.md](app/README.md) |
+| `tools\` | Maintenance tools (above) |
+| `docs\` | The project's web page and privacy policy (GitHub Pages) |
 
-Tests:
-
-- `tools\test-plugin-files.ps1` checks how the JSON files are read.
-- `tools\parity-test.ps1` compares the desktop app's output with the PowerShell version on copies of your data.
-- `tools\make-release.ps1` builds the distributable zip and checks it for personal data.
+The PowerShell version of the dashboard was retired in version 0.4.2; the app reads and writes the same data files.

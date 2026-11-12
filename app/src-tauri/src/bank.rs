@@ -1,6 +1,33 @@
-// Bank contents, names, smart values and GE prices (bank.ps1). The contents come only from the OSRS Data Sync
-// plugin's containers.json (plugin.rs containers). File formats: see the top of bank.ps1; every price file holds only
-// YOUR items (price_ids).
+// Bank contents, names, smart values and GE prices. The contents come only from the OSRS Data Sync plugin's
+// containers.json (plugin.rs containers). File formats: below; every price file holds only YOUR items (price_ids).
+//
+// Bank files (moved here from bank.ps1 when the PowerShell version was retired):
+// Bank contents for the page. They come only from the OSRS Data Sync RuneLite plugin
+// "OSRS Data Sync" (plugin.ps1 Get-PluginContainers: bank as last seen open + what you wear and carry).
+// Nothing is uploaded anywhere. Dot-sourced by server.ps1 after clog.ps1 (needs $DataDir, $Player, $Utf8, Get-Web,
+// ConvertTo-Hash). Read on Refresh.
+//
+// data\bank\history.jsonl  one line per change: {"t":read ISO,"saved":"<bank time>","src":"plugin",
+//                          "items":[[id,qty],...] (bank order, no placeholders), "worn":[[id,qty]],"carried":[[id,qty]],
+//                          "ge":[{"item":[id,total],"done":n,"price":gp,"spent":gp,"state":"SELLING"}]}  (last field)
+//                          Older lines have no "ge" and carry other src tags (app.js SAVE_KIND reads them; never rewritten).
+// data\bank\items.json     id -> [name, wiki image file]   (looked up when an id is new)
+// EVERY price file below holds only YOUR items (Get-BankPriceIds: bank ever, logged, loot + valuation parts).
+// The wiki price API always sends every item in one response; the rest is never saved.
+// data\bank\prices.json    {"t":ISO,"owned":true,"prices":{"<id>":gp}}  (once a day; fallback for ids missing elsewhere)
+// data\bank\prices-live.json  {"t":ISO,"prices":{..}}     GE prices now (every Refresh): today's bank value, "Price moves"
+// data\bank\prices-saves.jsonl {"t":<history line t>,"prices":{..}}  GE prices when each save was made (value graph)
+// data\bank\prices-reset.json {"t":ISO,"reset":unix s,"prices":{..}}  the hour before today's 00:00 UTC reset
+// data\bank\prices-days.json  {"<UTC date>":{..}}  each past day's prices.json (value graph at the prices of the time)
+//
+// Smart values for items without a GE price (the page uses the first that applies):
+// data\bank\mapping.json   RuneLite's own untradeable -> tradeable list (tools\fetch-item-mapping.ps1, once):
+//                          {"map":{"<id>":[[tradeable id, qty], ...]}}  several entries are added up
+// data\bank\derived.json   worked out here for new ids: {"<id>": null | {"via":"doses"|"charges"|"recipe",
+//                          "options":[[[part id, qty], ...], ...]}}  null = nothing found / has its own price.
+//                          doses: Prayer potion(2) = 2/4 of Prayer potion(4). charges: same price as the
+//                          charged version on the GE. recipe: OSRS Wiki recipe's tradeable materials (one level
+//                          deeper for untradeable materials); the page uses the cheapest option that has a value.
 
 use crate::clog::{bucket_url, ge_price, strip_file, PRICES_URL};
 use crate::refresh::Ctx;
