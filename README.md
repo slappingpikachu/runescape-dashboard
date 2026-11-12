@@ -62,7 +62,9 @@ The same dashboard is available as a standalone app that needs no console window
 - **Windows:** run [OSRS-Dashboard-Setup.exe](#download); it installs without administrator rights. The app is not
   code-signed, so on first launch Windows SmartScreen shows a warning: select **More info**, then **Run anyway**.
 - **Mac:** open [OSRS-Dashboard-Mac.dmg](#download) and drag **OSRS Dashboard** into **Applications**. The app is not
-  code-signed, so the first time, right-click it in Applications, select **Open**, then **Open** again.
+  code-signed, so the first time macOS says it can't check it: select **Done**, open **System Settings → Privacy &
+  Security**, scroll down, select **Open Anyway** next to "OSRS Dashboard" and confirm. (macOS 14 and older:
+  right-click the app, select **Open**, then **Open** again.)
 
 | | Windows | Mac |
 | --- | --- | --- |

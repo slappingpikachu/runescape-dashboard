@@ -82,7 +82,8 @@ data (history, bank, prices, settings, the builder's player name or user folder)
 Builds are not code-signed. Windows SmartScreen and macOS Gatekeeper show a warning on first launch:
 
 - **Windows:** **More info**, then **Run anyway**.
-- **macOS:** right-click the app, select **Open**, then **Open** again.
+- **macOS 15 and later:** open the app once, select **Done**, then **System Settings → Privacy & Security → Open
+  Anyway** next to "OSRS Dashboard". On macOS 14 and older: right-click the app, select **Open**, then **Open** again.
 
 ## Tests
 
