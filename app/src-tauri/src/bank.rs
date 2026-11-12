@@ -134,13 +134,31 @@ pub fn update(ctx: &Ctx) -> Res<String> {
         Some(l) => Some(parse(l)?),
         None => None,
     };
+    // Without a bank file here (or only an old one), the saved banks (some synced from another device) and the
+    // loot still need names and prices, or their values show as nothing on this device
+    let prev_only = |why: &str| -> Res<String> {
+        let mut set: IndexSet<String> = IndexSet::new();
+        let mut worn_ids = Vec::new();
+        if let Some(p) = &prev {
+            for f in ["items", "worn", "carried"] {
+                set.extend(value_ids(prop(p, f)));
+            }
+            for (_, list) in props(prop(p, "stored")) {
+                set.extend(value_ids(Some(&list)));
+            }
+            worn_ids = value_ids(prop(p, "worn"));
+        }
+        Ok(format!("Bank: {why} - {}", update_values(ctx, set, worn_ids, None)))
+    };
     let Some(plug) = crate::plugin::containers(ctx)? else {
-        return Ok("Bank: nothing from OSRS Data Sync yet (log in with the plugin on and open your bank once)".into());
+        return prev_only("nothing from OSRS Data Sync yet (log in with the plugin on and open your bank once)");
     };
     // Older than what another device sent (sync.rs): RuneLite hasn't run here since, so nothing here is newer
-    let plug_updated = crate::sync::updated_in(&read_text(&ctx.plugin_dir.join("containers.json")).unwrap_or_default());
+    let plug_updated = crate::sync::newest_plugin_file(&ctx.data, &ctx.plugin_dir, "containers.json")
+        .map(|(t, _)| crate::sync::updated_in(&t))
+        .unwrap_or_default();
     if crate::sync::is_stale(&ctx.data, "containers", &plug_updated) {
-        return Ok("Bank: skipped (older than the data imported from your other device; log in to RuneLite here to update it)".into());
+        return prev_only("skipped (older than the data imported from your other device; log in to RuneLite here to update it)");
     }
     let mut items = from_item_list(&plug.bank);
     let mut saved = if plug.bank_at != 0 {
@@ -254,10 +272,19 @@ pub fn update(ctx: &Ctx) -> Res<String> {
             set.insert(id.to_string());
         }
     }
+    let mut worn_ids: Vec<String> = worn.iter().map(|(id, _)| id.to_string()).collect();
+    if let Some(p) = &prev {
+        worn_ids.extend(value_ids(prop(p, "worn")));
+    }
+    Ok(format!("Bank (OSRS Data Sync): {status} - {}", update_values(ctx, set, worn_ids, line_t.as_deref())))
+}
+
+// Names, smart values, prices (now, past, days, saves) and slots for the bank's items, the loot and the log
+fn update_values(ctx: &Ctx, set: IndexSet<String>, worn_ids: Vec<String>, line_t: Option<&str>) -> String {
     let ids: Vec<String> = set.iter().cloned().collect();
     let names = update_items(ctx, &ids).unwrap_or_else(|e| format!("names unavailable: {e}"));
     let values = update_derived(ctx, &ids).unwrap_or_else(|e| format!("smart values unavailable: {e}"));
-    let parts: Vec<String> = bank_parts(ctx, &ids)?.into_iter().filter(|p| !set.contains(p)).collect();
+    let parts: Vec<String> = bank_parts(ctx, &ids).unwrap_or_default().into_iter().filter(|p| !set.contains(p)).collect();
     if !parts.is_empty() {
         let _ = update_items(ctx, &parts);
     }
@@ -276,14 +303,9 @@ pub fn update(ctx: &Ctx) -> Res<String> {
     let prices = update_prices(ctx, live.as_ref()).unwrap_or_else(|e| format!("prices unavailable: {e}"));
     let past = update_past_prices(ctx).unwrap_or_else(|e| format!("past prices unavailable: {e}"));
     let days = update_day_prices(ctx).unwrap_or_else(|e| format!("day prices unavailable: {e}"));
-    let saves =
-        update_save_prices(ctx, line_t.as_deref(), live.as_ref()).unwrap_or_else(|e| format!("save prices unavailable: {e}"));
-    let mut worn_ids: Vec<String> = worn.iter().map(|(id, _)| id.to_string()).collect();
-    if let Some(p) = &prev {
-        worn_ids.extend(value_ids(prop(p, "worn")));
-    }
+    let saves = update_save_prices(ctx, line_t, live.as_ref()).unwrap_or_else(|e| format!("save prices unavailable: {e}"));
     let _ = update_slots(ctx, &worn_ids);
-    Ok(format!("Bank (OSRS Data Sync): {status} - {names} - {values} - {prices} - {past} - {days} - {saves}"))
+    format!("{names} - {values} - {prices} - {past} - {days} - {saves}")
 }
 
 // Equipment slot of worn items (wiki infobox_item: id -> page, then infobox_bonuses: page -> slot). "" = not found.
@@ -551,7 +573,7 @@ static LINE_STORED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#","stored":\
 
 // Item ids in the plugin's current Grand Exchange offers (containers.json "ge")
 fn ge_ids(ctx: &Ctx) -> Vec<String> {
-    let text = read_text(&ctx.plugin_dir.join("containers.json")).unwrap_or_default();
+    let text = crate::sync::newest_plugin_file(&ctx.data, &ctx.plugin_dir, "containers.json").map(|(t, _)| t).unwrap_or_default();
     match GE_LIST.captures(&text) {
         Some(ge) => GE_ID.captures_iter(&ge[1]).map(|m| m[1].to_string()).collect(),
         None => Vec::new(),
@@ -570,7 +592,10 @@ pub fn price_ids(ctx: &Ctx) -> Res<IndexSet<String>> {
     for id in crate::clog::logged_ids(ctx) {
         ids.insert(id);
     }
-    if let Some(kc) = read_text(&ctx.plugin_dir.join("killcounts.json")) {
+    // Loot Tracker totals: this device's and the synced copy (either can hold items the other doesn't)
+    let own_kc = read_text(&ctx.plugin_dir.join("killcounts.json"));
+    let other_kc = read_text(&crate::sync::other_plugin_dir(&ctx.data).join("killcounts.json"));
+    for kc in [own_kc, other_kc].into_iter().flatten() {
         for d in KC_DROPS.captures_iter(&kc) {
             for m in KC_ID.captures_iter(&d[1]) {
                 ids.insert(m[1].to_string());

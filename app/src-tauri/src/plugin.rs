@@ -338,13 +338,14 @@ pub struct Store {
     pub items: Pairs,
 }
 
-// None when there is no file or the bank was never opened with the plugin on ("bank": [] = really empty)
+// None when there is no file or the bank was never opened with the plugin on ("bank": [] = really empty).
+// The newer of this device's file and the copy another device synced (sync.rs), so a device where RuneLite doesn't
+// run still has the bank, gear and offers of the device you play on.
 pub fn containers(ctx: &Ctx) -> Res<Option<Containers>> {
-    let file = ctx.plugin_dir.join("containers.json");
-    if !file.exists() {
+    let Some((text, _)) = crate::sync::newest_plugin_file(&ctx.data, &ctx.plugin_dir, "containers.json") else {
         return Ok(None);
-    }
-    let c: Value = serde_json::from_str(trim(&read_text(&file).unwrap_or_default())).err_text()?;
+    };
+    let c: Value = serde_json::from_str(trim(&text)).err_text()?;
     if prop(&c, "bank").map(|b| b.is_null()).unwrap_or(true) {
         return Ok(None);
     }
