@@ -323,6 +323,14 @@ fn export_text(data: &Path, player: &str, st: &State, now_s: &str) -> (String, H
     }
     add("loot", &plugin.join("loot.jsonl")); // this device's own drops only (not loot-other)
     add("gaps", &gap_file(data));
+    // RuneLite's current files (Kills & loot, GE offers, storage...): this device's own or, when newer, the ones the
+    // other device sent. One line each: {"file":"killcounts.json","data":<the file>}
+    out.push_str("{\"section\":\"pluginFiles\"}\n");
+    for f in PLUGIN_FILES {
+        if let Some((text, _)) = newest_plugin_file(data, &plugin, f) {
+            out.push_str(&format!("{{\"file\":\"{f}\",\"data\":{text}}}\n"));
+        }
+    }
     // Last line: the file is whole (an automatic import skips a file the cloud drive hasn't finished copying)
     out.push_str(END_LINE);
     out.push('\n');
@@ -330,6 +338,42 @@ fn export_text(data: &Path, player: &str, st: &State, now_s: &str) -> (String, H
 }
 
 const END_LINE: &str = r#"{"section":"end"}"#;
+
+// ---- RuneLite's current files from the other device ----
+// The page shows some sections straight from the plugin's files (Kills & loot from killcounts.json, GE offers and
+// storage from containers.json, ...). A device where RuneLite doesn't run would show old ones, so they travel in
+// the sync file too; data/plugin/other/<file> keeps the other device's copy, and the page gets whichever of the two
+// has the newer "updated" time.
+pub const PLUGIN_FILES: &[&str] = &["progress.json", "killcounts.json", "clog.json", "containers.json"];
+
+pub fn other_plugin_dir(data: &Path) -> PathBuf {
+    data.join("plugin").join("other")
+}
+
+// A whole JSON object file's text (one line), or None (missing, empty, cut off)
+fn whole_json(path: &Path) -> Option<String> {
+    let t = read_text(path)?;
+    let t = trim(&t).replace(['\r', '\n'], "");
+    (t.starts_with('{') && t.ends_with('}')).then_some(t)
+}
+
+// The newer of this device's plugin file and the other device's copy: (text, from the other device)
+pub fn newest_plugin_file(data: &Path, plugin: &Path, name: &str) -> Option<(String, bool)> {
+    let own = whole_json(&plugin.join(name));
+    let other = whole_json(&other_plugin_dir(data).join(name));
+    match (own, other) {
+        (Some(a), Some(b)) => {
+            if time_of(Some(&updated_in(&b))) > time_of(Some(&updated_in(&a))) {
+                Some((b, true))
+            } else {
+                Some((a, false))
+            }
+        }
+        (Some(a), None) => Some((a, false)),
+        (None, Some(b)) => Some((b, true)),
+        (None, None) => None,
+    }
+}
 
 pub fn export(data: &Path, player: &str) -> (u16, String) {
     if player.is_empty() {
@@ -668,6 +712,27 @@ pub fn import(data: &Path, player: &str, body: &[u8]) -> (u16, String) {
         }
     }
 
+    // RuneLite's current files from the other device, each kept when newer than the copy already here
+    let mut n = 0;
+    ensure_dir(&other_plugin_dir(data));
+    for l in get("pluginFiles") {
+        static FILE_LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"^\{"file":"([a-z]+\.json)","data":(\{.*\})\}$"#).unwrap());
+        let Some(c) = FILE_LINE.captures(l) else { continue };
+        let (name, text) = (c[1].to_string(), c[2].to_string());
+        if !PLUGIN_FILES.contains(&name.as_str()) || serde_json::from_str::<Value>(&text).is_err() {
+            continue;
+        }
+        let dst = other_plugin_dir(data).join(&name);
+        let cur = whole_json(&dst).map(|t| updated_in(&t)).unwrap_or_default();
+        if time_of(Some(&updated_in(&text))) > time_of(Some(&cur)) {
+            if let Err(e) = save(&dst, &[text]) {
+                return e;
+            }
+            n += 1;
+        }
+    }
+    added.insert("pluginFiles", n);
+
     // Newest plugin files known (is_stale) and where this import came from
     let hs = prop(&head, "seen").cloned().unwrap_or(Value::Null);
     for k in ["progress", "killcounts", "containers"] {
@@ -693,6 +758,7 @@ pub fn import(data: &Path, player: &str, body: &[u8]) -> (u16, String) {
         ("clog", "collection log updates"),
         ("loot", "drops"),
         ("kills", "kill count updates"),
+        ("pluginFiles", "RuneLite files"),
     ] {
         if a(k) > 0 {
             what.push(format!("{} {label}", a(k)));

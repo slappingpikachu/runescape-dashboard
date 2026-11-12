@@ -21,20 +21,18 @@ function Get-PluginDir {
   $name = ($Player -replace [char]160, ' ').Trim().ToLowerInvariant() -replace '[^a-z0-9_-]+', '_'
   return Join-Path $PluginRoot $name
 }
-function Get-PluginFiles { @("progress.json", "killcounts.json", "clog.json", "containers.json", "loot.jsonl" | ForEach-Object { Join-Path (Get-PluginDir) $_ }) + $KillHistoryFile + $LootGapFile + $NpcIconDir + $LootOtherFile + $GapsOtherFile }
+function Get-PluginFiles { @("progress.json", "killcounts.json", "clog.json", "containers.json", "loot.jsonl" | ForEach-Object { Join-Path (Get-PluginDir) $_ }) + $KillHistoryFile + $LootGapFile + $NpcIconDir + $LootOtherFile + $GapsOtherFile + @("progress.json", "killcounts.json", "clog.json", "containers.json" | ForEach-Object { Join-Path (Join-Path $PluginDataDir "other") $_ }) }
 
 function Get-PluginJson {
   $dir = Get-PluginDir
-  if (-not (Test-Path $dir)) { return "null" }
-  # A plugin file as it is. An empty or cut-off file (crash, full disk) is sent as null, so one bad file can't make
-  # the whole answer invalid JSON (the page would lose every plugin section)
+  if (-not (Test-Path $dir) -and -not (Test-Path $SyncOtherPluginDir)) { return "null" }
+  # A plugin file as it is (or the other device's copy when that is newer, sync.ps1). An empty or cut-off file
+  # (crash, full disk) is sent as null, so one bad file can't make the whole answer invalid JSON (the page would
+  # lose every plugin section)
   $read = {
     param($n)
-    $f = Join-Path $dir $n
-    if (-not (Test-Path $f)) { return "null" }
-    $text = [IO.File]::ReadAllText($f, $Utf8).Trim()
-    if ($text.StartsWith("{") -and $text.EndsWith("}")) { return $text }
-    Write-Host "Plugin file $n is empty or cut off; skipped"
+    $r = Get-SyncNewestPluginFile $n
+    if ($r) { return $r.text }
     return "null"
   }
 

@@ -161,6 +161,32 @@ function Get-SyncStatusJson {
     autoExported = $st.autoExported; autoError = $st.autoError; others = $others } | ConvertTo-Json -Compress -Depth 4)
 }
 
+# ---- RuneLite's current files from the other device ----
+# The page shows some sections straight from the plugin's files (Kills & loot from killcounts.json, GE offers and
+# storage from containers.json, ...). A device where RuneLite doesn't run would show old ones, so they travel in
+# the sync file too; data\plugin\other\<file> keeps the other device's copy, and the page gets whichever of the two
+# has the newer "updated" time.
+$SyncPluginFiles = @("progress.json", "killcounts.json", "clog.json", "containers.json")
+$SyncOtherPluginDir = Join-Path $PluginDataDir "other"
+function Get-SyncWholeJson([string]$path) {
+  if (-not (Test-Path $path)) { return $null }
+  $t = ([IO.File]::ReadAllText($path, $Utf8).Trim()) -replace "[\r\n]", ""
+  if ($t.StartsWith("{") -and $t.EndsWith("}")) { return $t } else { return $null }
+}
+function Get-SyncUpdated([string]$text) { if ($text -match '"updated":"([^"]*)"') { $Matches[1] } else { "" } }
+# The newer of this device's plugin file and the other device's copy: @{ text; other } or $null
+function Get-SyncNewestPluginFile([string]$name) {
+  $own = Get-SyncWholeJson (Join-Path (Get-PluginDir) $name)
+  $other = Get-SyncWholeJson (Join-Path $SyncOtherPluginDir $name)
+  if ($own -and $other) {
+    if ((ConvertTo-SyncTime (Get-SyncUpdated $other)) -gt (ConvertTo-SyncTime (Get-SyncUpdated $own))) { return @{ text = $other; other = $true } }
+    return @{ text = $own; other = $false }
+  }
+  if ($own) { return @{ text = $own; other = $false } }
+  if ($other) { return @{ text = $other; other = $true } }
+  return $null
+}
+
 # ---- Export ----
 # The export file's text: @(text, counts per part)
 $SyncEndLine = '{"section":"end"}'
@@ -179,6 +205,13 @@ function Get-SyncExportText($st, [string]$now) {
   foreach ($part in $SyncParts.Keys) { & $add $part (Get-SyncPartFile $part) }
   & $add "loot" (Join-Path (Get-PluginDir) "loot.jsonl")   # this device's own drops only (not loot-other)
   & $add "gaps" $LootGapFile
+  # RuneLite's current files (Kills & loot, GE offers, storage...): this device's own or, when newer, the ones the
+  # other device sent. One line each: {"file":"killcounts.json","data":<the file>}
+  [void]$sb.Append('{"section":"pluginFiles"}').Append("`n")
+  foreach ($f in $SyncPluginFiles) {
+    $n = Get-SyncNewestPluginFile $f
+    if ($n) { [void]$sb.Append("{""file"":""$f"",""data"":$($n.text)}").Append("`n") }
+  }
   # Last line: the file is whole (an automatic import skips a file the cloud drive hasn't finished copying)
   [void]$sb.Append($SyncEndLine).Append("`n")
   return @($sb.ToString(), $counts)
@@ -386,6 +419,22 @@ function Import-Sync([string]$text) {
   $added["gaps"] = $n
   if ($n) { Write-SyncLines $GapsOtherFile (Sort-SyncLines $go $SyncByT) }
 
+  # RuneLite's current files from the other device, each kept when newer than the copy already here
+  $n = 0
+  if (-not (Test-Path $SyncOtherPluginDir)) { New-Item -ItemType Directory $SyncOtherPluginDir -Force | Out-Null }
+  foreach ($l in (& $get "pluginFiles")) {
+    if ($l -notmatch '^\{"file":"([a-z]+\.json)","data":(\{.*\})\}$') { continue }
+    $name = $Matches[1]; $text = $Matches[2]
+    if ($SyncPluginFiles -notcontains $name) { continue }
+    try { [void]($text | ConvertFrom-Json) } catch { continue }
+    $dst = Join-Path $SyncOtherPluginDir $name
+    $cur = Get-SyncWholeJson $dst
+    if ((ConvertTo-SyncTime (Get-SyncUpdated $text)) -gt (ConvertTo-SyncTime $(if ($cur) { Get-SyncUpdated $cur } else { "" }))) {
+      Write-SyncLines $dst @($text); $n++
+    }
+  }
+  $added["pluginFiles"] = $n
+
   # Newest plugin files known (see Test-SyncStale) and where this import came from
   foreach ($k in "progress", "killcounts", "containers") { $st.seen[$k] = Get-SyncNewer $st.seen[$k] ([string]$head.seen.$k) }
   if ([long]$head.seen.bankAt -gt $st.seen.bankAt) { $st.seen.bankAt = [long]$head.seen.bankAt }
@@ -400,6 +449,7 @@ function Import-Sync([string]$text) {
   if ($added.clog) { $what += "$($added.clog) collection log updates" }
   if ($added.loot) { $what += "$($added.loot) drops" }
   if ($added.kills) { $what += "$($added.kills) kill count updates" }
+  if ($added.pluginFiles) { $what += "$($added.pluginFiles) RuneLite files" }
   $from = [string]$head.device.name
   $msg = if ($total) { "Merged from ${from}: " + ($what -join ", ") + "." } else { "Already up to date with $from." }
   Write-Host "Import from ${from}: $(($added.Keys | ForEach-Object { "$_ $($added[$_])" }) -join ', ') (backup: $backup)"

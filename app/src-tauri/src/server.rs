@@ -312,23 +312,13 @@ impl Dashboard {
     fn plugin(&self) -> String {
         let (player, _) = self.settings();
         let dir = refresh::plugin_dir(&player);
-        if !dir.exists() {
+        if !dir.exists() && !crate::sync::other_plugin_dir(&self.data_dir()).exists() {
             return "null".into();
         }
-        // A plugin file as it is; an empty or cut-off file is sent as null so the answer stays valid JSON
-        let read = |n: &str| -> String {
-            match read_text(&dir.join(n)) {
-                None => "null".into(),
-                Some(t) => {
-                    let t = trim(&t);
-                    if t.starts_with('{') && t.ends_with('}') {
-                        t.to_string()
-                    } else {
-                        "null".into()
-                    }
-                }
-            }
-        };
+        // A plugin file as it is (or the other device's copy when that is newer, sync.rs); an empty or cut-off file
+        // is sent as null so the answer stays valid JSON
+        let data_dir = self.data_dir();
+        let read = |n: &str| -> String { crate::sync::newest_plugin_file(&data_dir, &dir, n).map(|(t, _)| t).unwrap_or_else(|| "null".into()) };
         // Drop log: whole loot.jsonl lines, then the kills done without the plugin; the newest 5000
         let whole = |f: &Path| -> Vec<String> {
             read_lines(f)

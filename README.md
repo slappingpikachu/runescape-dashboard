@@ -128,8 +128,9 @@ the PowerShell version, which finds the Google Drive app's folder by itself.
 3. On the other computer, select **Sync**, then **Import File…**, and pick the file.
 
 A sync merges; it never replaces. Every snapshot from both computers is kept and sorted by time: hiscores, bank,
-quests, diaries, combat achievements, collection log, kill totals and the drop log. Settings, prices and images stay
-per computer. The files as they were before an import are
+quests, diaries, combat achievements, collection log, kill totals and the drop log. RuneLite's current files (Kills
+& loot, Grand Exchange offers, storage items) come along too, and each computer shows the newer ones, so a computer
+you don't play on stays up to date. Settings, prices and images stay per computer. The files as they were before an import are
 kept in `data\sync\backup-<time>\` (the newest three).
 
 - Both computers must be set up for the same OSRS name. Log in to the same RuneLite account on both, so RuneLite's
