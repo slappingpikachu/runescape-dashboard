@@ -369,6 +369,11 @@ input[type=search]:focus { border-color: var(--gold); }
 .sync-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .sync-actions .btn-primary, .sync-actions .btn-ghost { flex: 1; justify-content: center; }
 .sync-status:empty { display: none; }
+.sync-auto { white-space: pre-line; overflow-wrap: anywhere; }
+.sync-auto:empty { display: none; }
+#sync-folder-path { flex: 3; min-width: 0; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--border, #333); background: transparent; color: inherit; font: inherit; }
+#sync-folder-form .btn-primary { flex: 1; }
+.sync-auto.sync-warn { color: var(--red, #e5484d); }
 @media (max-width: 560px) {
   .sync-btn span { display: none; }
   .sync-panel { position: fixed; top: calc(var(--topbar-h) + 8px); left: 16px; right: 16px; width: auto; }

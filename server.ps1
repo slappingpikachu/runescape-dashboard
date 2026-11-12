@@ -280,7 +280,11 @@ try {
       if ($path -eq "/api/history" -and $ctx.Request.HttpMethod -eq "GET") {
         Send-Cached $ctx "application/json" (Get-Cached "history" @($HistoryFile) { Get-History })
       } elseif ($path -eq "/api/refresh" -and $ctx.Request.HttpMethod -eq "POST") {
+        # Automatic sync (sync.ps1): the other device's newer file first, so this Refresh builds on it; then this
+        # device's file for the other one
+        try { [void](Invoke-SyncAutoImport) } catch { Write-Host "Automatic sync failed: $($_.Exception.Message)" }
         $r = Invoke-Refresh
+        if ($r[0] -eq 200) { try { Invoke-SyncAutoExport } catch { Write-Host "Automatic sync failed: $($_.Exception.Message)" } }
         if ($r[0] -eq 200) { Send-Cached $ctx "application/json" (Get-Cached "history" @($HistoryFile) { Get-History }) }
         else { Send $ctx $r[0] "application/json" $r[1] }
       } elseif ($path -eq "/api/clog" -and $ctx.Request.HttpMethod -eq "GET") {
@@ -345,6 +349,13 @@ try {
         }
       } elseif ($path -eq "/api/sync" -and $ctx.Request.HttpMethod -eq "GET") {
         Send $ctx 200 "application/json" (Get-SyncStatusJson)
+      } elseif ($path -eq "/api/autosync" -and $ctx.Request.HttpMethod -eq "POST") {
+        # The other device's newer file from the sync folder (sync.ps1), when the page opens
+        $r = try { Invoke-SyncAutoImport } catch { [ordered]@{ imported = @(); error = $_.Exception.Message } }
+        Send $ctx 200 "application/json" ($r | ConvertTo-Json -Compress -Depth 3)
+      } elseif ($path -eq "/api/sync-folder" -and $ctx.Request.HttpMethod -eq "POST") {
+        $r = Set-SyncFolder (Read-Body $ctx)
+        Send $ctx $r[0] "application/json" $r[1]
       } elseif ($path -eq "/api/export" -and $ctx.Request.HttpMethod -eq "POST") {
         # One file in Downloads with this device's history, for Import on your other device (sync.ps1)
         $r = Export-Sync

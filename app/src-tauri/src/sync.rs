@@ -129,6 +129,11 @@ struct State {
     seen: Seen,
     exported: Option<String>,
     imported: Option<Value>,
+    // Automatic sync through a shared folder (see "Automatic sync" below)
+    folder: Option<String>,               // the folder picked by hand; None = Google Drive, found by itself
+    auto_seen: IndexMap<String, String>,  // device id -> "exported" of its newest file merged in
+    auto_exported: Option<String>,
+    auto_error: Option<String>,
 }
 
 fn opt_str(v: Option<&Value>) -> Option<String> {
@@ -156,6 +161,10 @@ fn load_state(data: &Path) -> State {
         },
         exported: opt_str(prop(&s, "exported")),
         imported,
+        folder: opt_str(prop(&s, "folder")),
+        auto_seen: props(prop(&s, "autoSeen")).into_iter().map(|(k, v)| (k, ps_string(Some(&v)))).collect(),
+        auto_exported: opt_str(prop(&s, "autoExported")),
+        auto_error: opt_str(prop(&s, "autoError")),
     };
     if st.id.is_empty() {
         st.id = random_id();
@@ -170,7 +179,11 @@ fn save_state(data: &Path, st: &State) -> Res<()> {
     let v = json!({
         "id": st.id, "name": st.name, "seen": st.seen.json(),
         "exported": st.exported.clone().map(Value::String).unwrap_or(Value::Null),
-        "imported": st.imported.clone().unwrap_or(Value::Null)
+        "imported": st.imported.clone().unwrap_or(Value::Null),
+        "folder": st.folder.clone().map(Value::String).unwrap_or(Value::Null),
+        "autoSeen": Value::Object(st.auto_seen.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect()),
+        "autoExported": st.auto_exported.clone().map(Value::String).unwrap_or(Value::Null),
+        "autoError": st.auto_error.clone().map(Value::String).unwrap_or(Value::Null)
     });
     write_text(&state_file(data), &ps_json(&v)).err_text()
 }
@@ -253,12 +266,26 @@ fn seen_now(st: &State, plugin: &Path) -> Seen {
     seen
 }
 
-pub fn status(data: &Path) -> String {
+pub fn status(data: &Path, player: &str) -> String {
     let st = load_state(data);
+    let s = |v: Option<String>| v.map(Value::String).unwrap_or(Value::Null);
+    let folder = auto_folder(data, &st);
+    // The other devices' files (folder and/or Google Drive): name + when exported
+    let mut list_err = None;
+    let others: Vec<Value> = other_files(data, player, &st, &mut list_err)
+        .into_iter()
+        .map(|o| json!({"name": o.name, "exported": o.exported, "merged": st.auto_seen.get(&o.id).map(|t| time_of(Some(t)) >= time_of(Some(&o.exported))).unwrap_or(false)}))
+        .collect();
     ps_json(&json!({
         "device": st.name,
-        "exported": st.exported.map(Value::String).unwrap_or(Value::Null),
-        "imported": st.imported.unwrap_or(Value::Null)
+        "exported": s(st.exported),
+        "imported": st.imported.unwrap_or(Value::Null),
+        "folder": s(folder.map(|f| f.display().to_string())),
+        "folderSet": s(st.folder),
+        "autoExported": s(st.auto_exported),
+        "autoError": s(list_err.or(st.auto_error)),
+        "others": others,
+        "google": crate::gdrive::status(data)
     }))
 }
 
@@ -268,16 +295,12 @@ fn error(status: u16, msg: &str) -> (u16, String) {
 
 // ---- Export ----
 
-pub fn export(data: &Path, player: &str) -> (u16, String) {
-    if player.is_empty() {
-        return error(400, "Set up your player name first.");
-    }
-    let mut st = load_state(data);
-    let now_s = iso(now());
+// The export file's text, and how many lines each part has
+fn export_text(data: &Path, player: &str, st: &State, now_s: &str) -> (String, HashMap<&'static str, usize>) {
     let plugin = plugin_dir(player);
     let head = json!({
         "osrsDashboardSync": VERSION, "player": player, "device": {"id": st.id, "name": st.name},
-        "exported": now_s, "seen": seen_now(&st, &plugin).json()
+        "exported": now_s, "seen": seen_now(st, &plugin).json()
     });
     let mut out = String::new();
     out.push_str(&ps_json(&head));
@@ -300,6 +323,21 @@ pub fn export(data: &Path, player: &str) -> (u16, String) {
     }
     add("loot", &plugin.join("loot.jsonl")); // this device's own drops only (not loot-other)
     add("gaps", &gap_file(data));
+    // Last line: the file is whole (an automatic import skips a file the cloud drive hasn't finished copying)
+    out.push_str(END_LINE);
+    out.push('\n');
+    (out, counts)
+}
+
+const END_LINE: &str = r#"{"section":"end"}"#;
+
+pub fn export(data: &Path, player: &str) -> (u16, String) {
+    if player.is_empty() {
+        return error(400, "Set up your player name first.");
+    }
+    let mut st = load_state(data);
+    let now_s = iso(now());
+    let (out, counts) = export_text(data, player, &st, &now_s);
     let home = home_dir();
     let mut dir = std::env::var_os("OSRS_SYNC_EXPORT_DIR").map(PathBuf::from).unwrap_or_else(|| home.join("Downloads"));
     if !dir.is_dir() {
@@ -790,6 +828,263 @@ pub fn drops_with_other(data: &Path, own_loot: Vec<String>, own_gaps: Vec<String
     all.extend(gap_fixed(&own_gaps, &other));
     all.extend(gap_fixed(&whole(&go), &own_loot));
     sort_lines(all, by_t)
+}
+
+// ---- Automatic sync through a shared folder ----
+// Google Drive (or a folder picked by hand) keeps one file per device in "OSRS Dashboard Sync":
+//   "<player> - <device name> (<device id>).osrssync", the same file Export makes, rewritten after every Refresh.
+// Before a Refresh (and when the page opens) the other devices' files there are merged in, each only when it is
+// newer than the one merged last time (autoSeen) and whole (ends with {"section":"end"}). Nothing else goes online:
+// the cloud drive's own app copies the folder between the computers.
+const AUTO_DIR: &str = "OSRS Dashboard Sync";
+
+// Google Drive for desktop's "My Drive" folder on this computer
+fn google_drive() -> Option<PathBuf> {
+    let home = home_dir();
+    let dir_ok = |p: &Path| p.is_dir();
+    if cfg!(target_os = "macos") {
+        // ~/Library/CloudStorage/GoogleDrive-<account>/My Drive (the name is translated in some languages)
+        let mut accounts: Vec<PathBuf> = std::fs::read_dir(home.join("Library").join("CloudStorage"))
+            .ok()?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| dir_ok(p) && p.file_name().map(|n| n.to_string_lossy().starts_with("GoogleDrive-")).unwrap_or(false))
+            .collect();
+        accounts.sort();
+        for a in accounts {
+            if dir_ok(&a.join("My Drive")) {
+                return Some(a.join("My Drive"));
+            }
+            let mut subs: Vec<PathBuf> = std::fs::read_dir(&a)
+                .ok()?
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    let n = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    dir_ok(p) && !n.starts_with('.') && n != "Shared drives" && n != "Other computers"
+                })
+                .collect();
+            subs.sort();
+            if let Some(d) = subs.into_iter().next() {
+                return Some(d);
+            }
+        }
+        None
+    } else {
+        // Windows: a drive letter (G: by default) holding "My Drive"; mirrored: in the user's folder
+        let letters = std::iter::once('G').chain(('D'..='Z').filter(|c| *c != 'G'));
+        for c in letters {
+            let p = PathBuf::from(format!("{c}:\\My Drive"));
+            if dir_ok(&p) {
+                return Some(p);
+            }
+        }
+        ["My Drive", "Google Drive"].iter().map(|n| home.join(n)).find(|p| dir_ok(p))
+    }
+}
+
+// The sync folder: the one picked by hand, else "OSRS Dashboard Sync" in the Google Drive app's folder (None =
+// neither, or Google Drive is connected directly: gdrive.rs, no Google Drive app needed)
+fn auto_folder(data: &Path, st: &State) -> Option<PathBuf> {
+    match &st.folder {
+        Some(f) => Some(PathBuf::from(f)).filter(|p| p.is_dir()),
+        None if crate::gdrive::connected(data) => None,
+        None => google_drive().map(|g| g.join(AUTO_DIR)),
+    }
+}
+
+struct OtherFile {
+    path: PathBuf,
+    drive: Option<String>, // the file's id in Google Drive (connected directly) instead of a path
+    id: String,
+    name: String,
+    exported: String,
+}
+
+// The other devices' files for this player in the folder, newest per device (a cloud drive can leave copies)
+fn auto_files(folder: &Path, player: &str, own_id: &str) -> Vec<OtherFile> {
+    let mut by_id: IndexMap<String, OtherFile> = IndexMap::new();
+    let Ok(rd) = std::fs::read_dir(folder) else { return Vec::new() };
+    let mut paths: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().map(|x| x == "osrssync").unwrap_or(false)).collect();
+    paths.sort();
+    for p in paths {
+        let Some(first) = first_line(&p) else { continue };
+        let Ok(h) = serde_json::from_str::<Value>(&first) else { continue };
+        if ps_long(prop(&h, "osrsDashboardSync")) != VERSION || norm_player(&ps_string(prop(&h, "player"))) != norm_player(player) {
+            continue;
+        }
+        let dev = prop(&h, "device").cloned().unwrap_or(Value::Null);
+        let id = ps_string(prop(&dev, "id"));
+        if id.is_empty() || id == own_id {
+            continue;
+        }
+        let f = OtherFile { path: p, drive: None, id: id.clone(), name: ps_string(prop(&dev, "name")), exported: ps_string(prop(&h, "exported")) };
+        let newer_file = by_id.get(&id).map(|o| time_of(Some(&f.exported)) > time_of(Some(&o.exported))).unwrap_or(true);
+        if newer_file {
+            by_id.insert(id, f);
+        }
+    }
+    by_id.into_values().collect()
+}
+
+// The other devices' files in Google Drive's app folder (gdrive.rs), from what each upload noted on the file
+fn drive_files(data: &Path, player: &str, own_id: &str) -> Result<Vec<OtherFile>, String> {
+    let mut by_id: IndexMap<String, OtherFile> = IndexMap::new();
+    for f in crate::gdrive::list(data)? {
+        let p = |k: &str| ps_string(prop(&f.props, k));
+        if p("player") != norm_player(player) || p("device").is_empty() || p("device") == own_id {
+            continue;
+        }
+        let o = OtherFile { path: PathBuf::new(), drive: Some(f.id.clone()), id: p("device"), name: p("name"), exported: p("exported") };
+        if by_id.get(&o.id).map(|x| time_of(Some(&o.exported)) > time_of(Some(&x.exported))).unwrap_or(true) {
+            by_id.insert(o.id.clone(), o);
+        }
+    }
+    Ok(by_id.into_values().collect())
+}
+
+// Every other device's file this device can reach: the sync folder and/or Google Drive. Errors go in `err`.
+fn other_files(data: &Path, player: &str, st: &State, err: &mut Option<String>) -> Vec<OtherFile> {
+    let mut all = auto_folder(data, st).map(|f| auto_files(&f, player, &st.id)).unwrap_or_default();
+    if crate::gdrive::connected(data) {
+        match drive_files(data, player, &st.id) {
+            Ok(d) => all.extend(d),
+            Err(e) => *err = Some(format!("Google Drive: {e}")),
+        }
+    }
+    all
+}
+
+fn first_line(p: &Path) -> Option<String> {
+    use std::io::BufRead;
+    let f = std::fs::File::open(p).ok()?;
+    let mut l = String::new();
+    std::io::BufReader::new(f).read_line(&mut l).ok()?;
+    Some(trim(l.trim_start_matches('\u{feff}')).to_string())
+}
+
+// Merges the other devices' newer files: {"imported":[messages],"error"}
+pub fn auto_import(data: &Path, player: &str) -> Value {
+    if player.is_empty() {
+        return json!({"imported": [], "error": Value::Null});
+    }
+    let st = load_state(data);
+    let mut msgs = Vec::new();
+    let mut err: Option<String> = None;
+    for o in other_files(data, player, &st, &mut err) {
+        let done = load_state(data).auto_seen.get(&o.id).map(|t| time_of(Some(t)) >= time_of(Some(&o.exported))).unwrap_or(false);
+        if done {
+            continue;
+        }
+        let text = match &o.drive {
+            Some(id) => match crate::gdrive::download(data, id) {
+                Ok(t) => t,
+                Err(e) => {
+                    err = Some(format!("Google Drive: {e}"));
+                    continue;
+                }
+            },
+            None => match std::fs::read(&o.path) {
+                Ok(b) => String::from_utf8_lossy(&b).into_owned(),
+                Err(_) => continue,
+            },
+        };
+        // Not whole yet (still being copied by the cloud drive): next time
+        if text.trim_end().lines().last().map(trim) != Some(END_LINE) {
+            continue;
+        }
+        let (code, body) = import(data, player, text.as_bytes());
+        let b: Value = serde_json::from_str(&body).unwrap_or(Value::Null);
+        if code == 200 {
+            let mut st = load_state(data);
+            st.auto_seen.insert(o.id.clone(), o.exported.clone());
+            st.auto_error = None;
+            let _ = save_state(data, &st);
+            msgs.push(Value::String(ps_string(prop(&b, "message"))));
+        } else {
+            err = Some(format!("{}: {}", o.name, ps_string(prop(&b, "error"))));
+        }
+    }
+    if let Some(e) = &err {
+        let mut st = load_state(data);
+        st.auto_error = Some(e.clone());
+        let _ = save_state(data, &st);
+        eprintln!("Automatic sync: {e}");
+    }
+    json!({"imported": msgs, "error": err})
+}
+
+// Rewrites this device's file in the sync folder (after a Refresh)
+pub fn auto_export(data: &Path, player: &str) -> Value {
+    if player.is_empty() {
+        return Value::Null;
+    }
+    let mut st = load_state(data);
+    let folder = auto_folder(data, &st);
+    let drive = crate::gdrive::connected(data);
+    if folder.is_none() && !drive {
+        return Value::Null;
+    }
+    let now_s = iso(now());
+    let (text, _) = export_text(data, player, &st, &now_s);
+    static NOT_FILE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"[^A-Za-z0-9 _-]"#).unwrap());
+    let name = format!("{} - {} ({}).osrssync", NOT_FILE.replace_all(player, ""), trim(&NOT_FILE.replace_all(&st.name, "")), st.id);
+    st.auto_error = None;
+    if drive {
+        let short: String = st.name.chars().take(40).collect();
+        let props = json!({"player": norm_player(player), "device": st.id, "name": short, "exported": now_s});
+        match crate::gdrive::upload(data, &name, &text, props) {
+            Ok(()) => {
+                st.auto_exported = Some(now_s.clone());
+                eprintln!("Automatic sync: saved {name} to Google Drive");
+            }
+            Err(e) => {
+                st.auto_error = Some(format!("Google Drive: could not save ({e})"));
+                eprintln!("Automatic sync: {}", st.auto_error.as_ref().unwrap());
+            }
+        }
+    }
+    let Some(folder) = folder else {
+        let _ = save_state(data, &st);
+        return json!({"drive": true});
+    };
+    ensure_dir(&folder);
+    let file = folder.join(&name);
+    let part = folder.join(format!("{name}.part"));
+    let res = write_text(&part, &text).and_then(|_| std::fs::rename(&part, &file));
+    match res {
+        Ok(()) => {
+            st.auto_exported = Some(now_s);
+            eprintln!("Automatic sync: saved {}", file.display());
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&part);
+            st.auto_error = Some(format!("Could not save to {}: {e}", folder.display()));
+            eprintln!("Automatic sync: {}", st.auto_error.as_ref().unwrap());
+        }
+    }
+    let _ = save_state(data, &st);
+    json!({"path": file.display().to_string()})
+}
+
+// POST /api/sync-folder {"folder": "<path>"} picks the folder; "" = back to Google Drive
+pub fn set_folder(data: &Path, body: &[u8]) -> (u16, String) {
+    let v: Value = serde_json::from_slice(body).unwrap_or(Value::Null);
+    let f = trim(&ps_string(prop(&v, "folder"))).to_string();
+    let mut st = load_state(data);
+    if f.is_empty() {
+        st.folder = None;
+    } else {
+        if !Path::new(&f).is_dir() {
+            return error(400, &format!("That folder doesn't exist: {f}"));
+        }
+        st.folder = Some(f);
+    }
+    st.auto_error = None;
+    if let Err(e) = save_state(data, &st) {
+        return error(500, &format!("Could not save: {e}"));
+    }
+    (200, r#"{"ok":true}"#.into())
 }
 
 #[cfg(test)]

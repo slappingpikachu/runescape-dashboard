@@ -20,6 +20,10 @@ percent-encoding = "2"
 ureq = "2"
 # Icons: read PNG/JPEG, add the white outline, save PNG
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# Google Drive sign-in (src/gdrive.rs): PKCE code challenge + random state
+sha2 = "0.10"
+base64 = "0.22"
+getrandom = "0.2"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [profile.release]

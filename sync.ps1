@@ -95,7 +95,13 @@ function Get-SyncState {
     }
     exported = if ($s.exported) { [string]$s.exported } else { $null }
     imported = if ($s.imported) { [ordered]@{ from = [string]$s.imported.from; name = [string]$s.imported.name; exported = [string]$s.imported.exported; t = [string]$s.imported.t } } else { $null }
+    # Automatic sync (see "Automatic sync" below)
+    folder = if ($s.folder) { [string]$s.folder } else { $null }
+    autoSeen = [ordered]@{}
+    autoExported = if ($s.autoExported) { [string]$s.autoExported } else { $null }
+    autoError = if ($s.autoError) { [string]$s.autoError } else { $null }
   }
+  if ($s.autoSeen) { foreach ($p in $s.autoSeen.PSObject.Properties) { $st.autoSeen[$p.Name] = [string]$p.Value } }
   if (-not $st.id) {
     $st.id = -join (1..16 | ForEach-Object { "{0:x}" -f (Get-Random -Maximum 16) })
     $st.name = Get-SyncDeviceName
@@ -146,15 +152,19 @@ function Get-SyncSeenNow($st) {
 
 function Get-SyncStatusJson {
   $st = Get-SyncState
-  return ([ordered]@{ device = $st.name; exported = $st.exported; imported = $st.imported } | ConvertTo-Json -Compress -Depth 3)
+  $folder = Get-SyncAutoFolder $st
+  $others = @(if ($folder) { foreach ($o in (Get-SyncAutoFiles $folder $st.id)) {
+    $m = $st.autoSeen.Contains($o.id) -and (ConvertTo-SyncTime $st.autoSeen[$o.id]) -ge (ConvertTo-SyncTime $o.exported)
+    [ordered]@{ name = $o.name; exported = $o.exported; merged = $m }
+  } })
+  return ([ordered]@{ device = $st.name; exported = $st.exported; imported = $st.imported; folder = $folder; folderSet = $st.folder
+    autoExported = $st.autoExported; autoError = $st.autoError; others = $others } | ConvertTo-Json -Compress -Depth 4)
 }
 
 # ---- Export ----
-# POST /api/export -> @(status, JSON {"message","path"} | {"error"})
-function Export-Sync {
-  if (-not $Player) { return @(400, "{""error"":""Set up your player name first.""}") }
-  $st = Get-SyncState
-  $now = (Get-Date).ToUniversalTime().ToString("o")
+# The export file's text: @(text, counts per part)
+$SyncEndLine = '{"section":"end"}'
+function Get-SyncExportText($st, [string]$now) {
   $head = [ordered]@{ osrsDashboardSync = $SyncVersion; player = $Player; device = [ordered]@{ id = $st.id; name = $st.name }; exported = $now; seen = (Get-SyncSeenNow $st) }
   $sb = New-Object System.Text.StringBuilder
   [void]$sb.Append(($head | ConvertTo-Json -Compress -Depth 4)).Append("`n")
@@ -169,11 +179,21 @@ function Export-Sync {
   foreach ($part in $SyncParts.Keys) { & $add $part (Get-SyncPartFile $part) }
   & $add "loot" (Join-Path (Get-PluginDir) "loot.jsonl")   # this device's own drops only (not loot-other)
   & $add "gaps" $LootGapFile
+  # Last line: the file is whole (an automatic import skips a file the cloud drive hasn't finished copying)
+  [void]$sb.Append($SyncEndLine).Append("`n")
+  return @($sb.ToString(), $counts)
+}
+# POST /api/export -> @(status, JSON {"message","path"} | {"error"})
+function Export-Sync {
+  if (-not $Player) { return @(400, "{""error"":""Set up your player name first.""}") }
+  $st = Get-SyncState
+  $now = (Get-Date).ToUniversalTime().ToString("o")
+  $text, $counts = Get-SyncExportText $st $now
   $dir = if ($SyncExportDir) { $SyncExportDir } else { Join-Path $HOME "Downloads" }   # tests set $SyncExportDir
   if (-not (Test-Path $dir)) { $dir = $HOME }
   $dev = ($st.name -replace '[^A-Za-z0-9 _-]', '').Trim()
   $file = Join-Path $dir "OSRS Dashboard sync - $Player - $dev - $((Get-Date).ToString('yyyy-MM-dd HHmm')).osrssync"
-  [IO.File]::WriteAllText($file, $sb.ToString(), $Utf8)
+  [IO.File]::WriteAllText($file, $text, $Utf8)
   $st.exported = $now
   Save-SyncState $st
   Write-Host "Exported for another device: $file"
@@ -384,6 +404,120 @@ function Import-Sync([string]$text) {
   $msg = if ($total) { "Merged from ${from}: " + ($what -join ", ") + "." } else { "Already up to date with $from." }
   Write-Host "Import from ${from}: $(($added.Keys | ForEach-Object { "$_ $($added[$_])" }) -join ', ') (backup: $backup)"
   return @(200, ([ordered]@{ message = $msg } | ConvertTo-Json -Compress))
+}
+
+# ---- Automatic sync through a shared folder ----
+# Google Drive (or a folder picked by hand) keeps one file per device in "OSRS Dashboard Sync":
+#   "<player> - <device name> (<device id>).osrssync", the same file Export makes, rewritten after every Refresh.
+# Before a Refresh (and when the page opens) the other devices' files there are merged in, each only when it is
+# newer than the one merged last time (autoSeen) and whole (ends with {"section":"end"}). Nothing else goes online:
+# the cloud drive's own app copies the folder between the computers.
+$SyncAutoDirName = "OSRS Dashboard Sync"
+# Google Drive for desktop's "My Drive" folder on this computer
+function Get-SyncGoogleDrive {
+  if ($IsMacOS) {
+    $cs = Join-Path $HOME "Library/CloudStorage"
+    if (-not (Test-Path $cs)) { return $null }
+    foreach ($a in @(Get-ChildItem $cs -Directory -Filter "GoogleDrive-*" | Sort-Object Name)) {
+      $md = Join-Path $a.FullName "My Drive"
+      if (Test-Path $md -PathType Container) { return $md }
+      $sub = @(Get-ChildItem $a.FullName -Directory | Where-Object { -not $_.Name.StartsWith(".") -and $_.Name -ne "Shared drives" -and $_.Name -ne "Other computers" } | Sort-Object Name)
+      if ($sub.Count) { return $sub[0].FullName }
+    }
+    return $null
+  }
+  # Windows: a drive letter (G: by default) holding "My Drive"; mirrored: in the user's folder
+  foreach ($c in @("G") + @([char[]](68..90) | ForEach-Object { [string]$_ } | Where-Object { $_ -ne "G" })) {
+    $p = "${c}:\My Drive"
+    if (Test-Path $p -PathType Container) { return $p }
+  }
+  foreach ($n in "My Drive", "Google Drive") { $p = Join-Path $HOME $n; if (Test-Path $p -PathType Container) { return $p } }
+  return $null
+}
+# The sync folder: the one picked by hand, else "OSRS Dashboard Sync" in Google Drive ($null = neither found)
+function Get-SyncAutoFolder($st) {
+  if ($st.folder) { if (Test-Path $st.folder -PathType Container) { return $st.folder } else { return $null } }
+  $g = Get-SyncGoogleDrive
+  if ($g) { return (Join-Path $g $SyncAutoDirName) }
+  return $null
+}
+# The other devices' files for this player in the folder, newest per device (a cloud drive can leave copies)
+function Get-SyncAutoFiles([string]$folder, [string]$ownId) {
+  $byId = [ordered]@{}
+  if (-not (Test-Path $folder)) { return @() }
+  $norm = { param($n) (([string]$n -replace [char]160, ' ').Trim().ToLowerInvariant() -replace '[^a-z0-9_-]+', '_') }
+  foreach ($f in @(Get-ChildItem $folder -File -Filter "*.osrssync" | Sort-Object Name)) {
+    $first = try { $r = New-Object IO.StreamReader($f.FullName, $Utf8); try { $r.ReadLine() } finally { $r.Close() } } catch { $null }
+    if (-not $first) { continue }
+    $h = try { ConvertFrom-SyncJson $first.Trim([char]0xFEFF).Trim() } catch { $null }
+    if (-not $h -or $h.osrsDashboardSync -ne $SyncVersion -or (& $norm $h.player) -ne (& $norm $Player)) { continue }
+    $id = [string]$h.device.id
+    if (-not $id -or $id -eq $ownId) { continue }
+    $o = @{ path = $f.FullName; id = $id; name = [string]$h.device.name; exported = [string]$h.exported }
+    if (-not $byId.Contains($id) -or (ConvertTo-SyncTime $o.exported) -gt (ConvertTo-SyncTime $byId[$id].exported)) { $byId[$id] = $o }
+  }
+  return @($byId.Values)
+}
+# Merges the other devices' newer files -> @{ imported = @(messages); error }
+function Invoke-SyncAutoImport {
+  $res = [ordered]@{ imported = @(); error = $null }
+  if (-not $Player) { return $res }
+  $st = Get-SyncState
+  $folder = Get-SyncAutoFolder $st
+  if (-not $folder) { return $res }
+  foreach ($o in (Get-SyncAutoFiles $folder $st.id)) {
+    $seen = (Get-SyncState).autoSeen
+    if ($seen.Contains($o.id) -and (ConvertTo-SyncTime $seen[$o.id]) -ge (ConvertTo-SyncTime $o.exported)) { continue }
+    $text = try { [IO.File]::ReadAllText($o.path, $Utf8) } catch { $null }
+    if (-not $text) { continue }
+    # Not whole yet (still being copied by the cloud drive): next time
+    $lastLine = @($text.TrimEnd().Split([char[]]"`r`n", [StringSplitOptions]::RemoveEmptyEntries))[-1]
+    if ($lastLine.Trim() -ne $SyncEndLine) { continue }
+    $r = try { Import-Sync $text } catch { @(500, "{""error"":$(ConvertTo-JsonString "Import failed: $($_.Exception.Message)")}") }
+    $b = try { $r[1] | ConvertFrom-Json } catch { $null }
+    if ($r[0] -eq 200) {
+      $st = Get-SyncState; $st.autoSeen[$o.id] = $o.exported; $st.autoError = $null; Save-SyncState $st
+      $res.imported += [string]$b.message
+    } else { $res.error = "$($o.name): $($b.error)" }
+  }
+  if ($res.error) { $st = Get-SyncState; $st.autoError = $res.error; Save-SyncState $st; Write-Host "Automatic sync: $($res.error)" }
+  return $res
+}
+# Rewrites this device's file in the sync folder (after a Refresh)
+function Invoke-SyncAutoExport {
+  if (-not $Player) { return }
+  $st = Get-SyncState
+  $folder = Get-SyncAutoFolder $st
+  if (-not $folder) { return }
+  if (-not (Test-Path $folder)) { New-Item -ItemType Directory $folder -Force | Out-Null }
+  $now = (Get-Date).ToUniversalTime().ToString("o")
+  $text, $counts = Get-SyncExportText $st $now
+  $name = "$($Player -replace '[^A-Za-z0-9 _-]', '') - $(($st.name -replace '[^A-Za-z0-9 _-]', '').Trim()) ($($st.id)).osrssync"
+  $file = Join-Path $folder $name
+  $part = "$file.part"
+  try {
+    [IO.File]::WriteAllText($part, $text, $Utf8)
+    Move-Item -Force $part $file
+    $st.autoExported = $now; $st.autoError = $null
+    Write-Host "Automatic sync: saved $file"
+  } catch {
+    Remove-Item $part -Force -ErrorAction SilentlyContinue
+    $st.autoError = "Could not save to ${folder}: $($_.Exception.Message)"
+    Write-Host "Automatic sync: $($st.autoError)"
+  }
+  Save-SyncState $st
+}
+# POST /api/sync-folder {"folder": "<path>"} picks the folder; "" = back to Google Drive
+function Set-SyncFolder([string]$body) {
+  $v = try { $body | ConvertFrom-Json } catch { $null }
+  $f = ([string]$v.folder).Trim()
+  $st = Get-SyncState
+  if (-not $f) { $st.folder = $null }
+  elseif (-not (Test-Path $f -PathType Container)) { return @(400, "{""error"":$(ConvertTo-JsonString "That folder doesn't exist: $f")}") }
+  else { $st.folder = $f }
+  $st.autoError = $null
+  Save-SyncState $st
+  return @(200, '{"ok":true}')
 }
 
 # ---- Drop log with the other device's drops (plugin.ps1 Get-PluginJson) ----

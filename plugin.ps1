@@ -173,8 +173,15 @@ function Update-PluginClog {
   $gapN = if ($prev -and $null -ne $prev.gapN) { [int]$prev.gapN } else { 0 }
   if (Test-Path $LootGapFile) {
     $gl = @([IO.File]::ReadAllLines($LootGapFile, $Utf8) | Where-Object { $_.Trim() })
-    for ($i = $gapN; $i -lt $gl.Count; $i++) {
-      $entry = try { $gl[$i] | ConvertFrom-Json } catch { $null }
+    $new = @(for ($i = $gapN; $i -lt $gl.Count; $i++) { $gl[$i].Trim() })
+    # Kills your other device logged (merged in by Sync) are in RuneLite's shared Loot Tracker totals too, so they
+    # look like gaps here; their drops are already in the merged log, so they come off first (sync.ps1 Get-SyncGapFixed)
+    if ($new.Count -and (Test-Path $LootOtherFile)) {
+      $real = @([IO.File]::ReadAllLines($LootOtherFile, $Utf8) | ForEach-Object { $_.Trim() } | Where-Object { $_.StartsWith('{"t":"') })
+      $new = @(Get-SyncGapFixed $new $real)
+    }
+    foreach ($g in $new) {
+      $entry = try { $g | ConvertFrom-Json } catch { $null }
       if (-not $entry -or -not $entry.items) { continue }
       $t = [DateTime]::Parse($entry.t).ToUniversalTime()
       foreach ($d in @($entry.items)) {
@@ -520,6 +527,9 @@ function Update-PluginLootGaps {
       $l = if ($lv.ContainsKey($key)) { $lv[$key] } else { @{ kills = 0L; drops = @{} } }
       if ($c.kills -lt $o.kills) { $base[$key] = @{ kills = $c.kills; drops = $c.drops }; continue }   # Loot Tracker reset
       $miss = $c.kills - $o.kills - $l.kills
+      # Old Loot Tracker history arriving late (RuneLite loads it from your RuneLite account, e.g. on a new computer):
+      # every kill of this source was before the last Refresh, so nothing was played now. Taken into the base, no gap.
+      if ($miss -gt 0 -and $c.last -gt 0 -and $c.last -le ([DateTimeOffset]$T).ToUnixTimeMilliseconds()) { $base[$key] = @{ kills = $c.kills; drops = $c.drops }; continue }
       $ids = New-Object 'System.Collections.Generic.HashSet[string]'
       foreach ($id in @($c.drops.Keys) + @($o.drops.Keys) + @($l.drops.Keys)) { [void]$ids.Add($id) }
       if ($miss -gt 0) {
