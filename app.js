@@ -2310,7 +2310,9 @@ function renderBank() {
   const inclText = incl.length ? ` (Incl. ${incl.length > 1 ? `${incl.slice(0, -1).join(", ")} &amp; ${incl.at(-1)}` : incl[0]})` : "";
   // Most valuable: live GE price from the last Refresh, not the once-a-day one
   const stack = ([id, q]) => q * (b.live ? bankValue(id, b.live.prices).gp : bankPrice(id));
-  const best = cur.reduce((a, it) => (stack(it) > stack(a) ? it : a), cur[0]);
+  // Coins and platinum tokens are cash, not an item: never the most valuable
+  const goods = cur.filter(([id]) => id !== 995 && id !== 13204);
+  const best = goods.reduce((a, it) => (stack(it) > stack(a) ? it : a), goods[0]);
   const unpriced = cur.filter(([id]) => !bankPrice(id)).length;
   const smart = cur.filter(([id]) => bankValue(id).how).length;
   const stat = (label, value, sub = "") => `<div class="clog-stat"><span>${label}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
@@ -2331,7 +2333,7 @@ function renderBank() {
           <div id="bank-spark">${bankSparkHtml(secPeriod("bank"))}</div>
         </div>
         <div class="clog-stats">
-          ${stat("Coins", compact(coins), "incl. platinum tokens")}
+          ${stat("Coins", `<img class="coin-ic" src="${itemIcon(995)}" alt="">${compact(coins)}`, "incl. platinum tokens")}
           ${stat("Items", cur.length.toLocaleString(), `${smart.toLocaleString()} valued by parts · ${unpriced.toLocaleString()} no value`)}
           ${best ? `<div class="clog-stat bank-best"><span>Most Valuable</span>${bankTile(best, "faint")}<b title="${Math.round(stack(best)).toLocaleString()} GP${b.live ? " · live price at the last Update" : ""}">${compact(stack(best))}</b><small>${esc(bankName(best[0]))}${best[1] > 1 ? ` × ${compact(best[1])}` : ""}</small></div>` : ""}
         </div>
